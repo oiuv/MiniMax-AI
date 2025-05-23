@@ -34,7 +34,7 @@ model = 'speech-02-hd'
 # 生成声音的语速，可选范围[0.5,2]，默认值为1.0，取值越大，语速越快。
 speed = 1.0
 # 生成声音的音量，可选范围（0,10]，默认值为1.0，取值越大，音量越高。
-vol = 5.0
+vol = 3.0
 # 生成声音的语调，可选范围[-12,12]，默认值为0，（0为原音色输出，取值需为整数）。
 pitch = 0
 # 情绪参数范围["happy", "sad", "angry", "fearful", "disgusted", "surprised", "neutral"]
@@ -54,7 +54,7 @@ def build_tts_stream_headers(api_key: str) -> dict:
 
 def build_tts_stream_body(text: str, voice_id: str) -> str:
     body = {
-        "model": "speech-01-hd",
+        "model": "speech-02-hd",
         "text": text,
         "stream": True,
         "voice_setting": {
@@ -123,17 +123,22 @@ def audio_play(audio_stream: Iterator[bytes]) -> bytes:
 
 if __name__ == "__main__":
     text = """
-大家好，欢迎在座的学员和网上的学员。今天我们的课程正式开始。这几天的安排主要是集中讲解刑法学科。
+义士誓书
+<#1#>
+契丹入寇，犯我神州。
+土为裂陁，民为鱼肉。
+任胡纵乱，我岂无人？
+四方豪杰，闻义而动。
+聚百二十人，同守此关。
+今一百一十九人，共下誓书：
+山河寸土，誓死不易。
+苟渝此盟，神人共殛。
 
-法考分为八个科目，其中刑法、民法、行政法和商经法是我们法考的核心科目。刑法是法学的基础，我们在刚开始学习法考时，就需要首先掌握刑法。
-
-我们的目标很明确，就是在半年内学习完所有法学科目，通过这个法考。
-
-在正式授课之前，我们先来给大家介绍一下法考的基本情况以及刑法的学习方法。
+（其下是密密麻麻的姓名与手印）
     """
     # 列出所有可用的 voice_id
     system_voice = ['male-qn-qingse', 'male-qn-jingying', 'male-qn-badao', 'male-qn-daxuesheng', 'female-shaonv', 'female-yujie', 'female-chengshu', 'female-tianmei', 'presenter_male', 'presenter_female', 'audiobook_male_1', 'audiobook_male_2', 'audiobook_female_1', 'audiobook_female_2', 'male-qn-qingse-jingpin', 'male-qn-jingying-jingpin', 'male-qn-badao-jingpin', 'male-qn-daxuesheng-jingpin', 'female-shaonv-jingpin', 'female-yujie-jingpin', 'female-chengshu-jingpin', 'female-tianmei-jingpin', 'clever_boy', 'cute_boy', 'lovely_girl', 'cartoon_pig', 'bingjiao_didi', 'junlang_nanyou', 'chunzhen_xuedi', 'lengdan_xiongzhang', 'badao_shaoye', 'tianxin_xiaoling', 'qiaopi_mengmei', 'wumei_yujie', 'diadia_xuemei', 'danya_xuejie', 'Santa_Claus ', 'Grinch', 'Rudolph', 'Arnold', 'Charming_Santa', 'Charming_Lady', 'Sweet_Girl', 'Cute_Elf', 'Attractive_Girl', 'Serene_Woman']
-    voice_ids = ['Huizi000']
+    voice_ids = ['TV-m01_hd']
 
     # 循环遍历每个 voice_id，生成并保存音频
     for voice_id in voice_ids:
