@@ -8,9 +8,12 @@
 
 voice_id|voice_name
 -|-
+MyVoice01_hd|雪风
 Huizi000|惠子
 YYAYAO00|抖音阿瑶
+YYAYAO10|抖音阿瑶
 YYSLS000|少东家
+YYSLS010|少东家
 YYSLS-f01_hd|少东家
 YYSLS-f02_hd|少东家
 YYSLS-f03_hd|周红线
@@ -19,6 +22,10 @@ YYSLS-f05_hd|千夜
 YYSLS-f06_hd|盈盈
 YYSLS-f07_hd|东阙公子
 YYSLS-f08_hd|容鸢
+YYSLS-f09_hd|龟奶奶
+YYSLS-m01_hd|伊刀
 TV-f01_hd|白素贞
 TV-f02_hd|小青
+TV-f03_hd|白素贞（唱）
 TV-m01_hd|许仙
+TV-m10_hd|蜡笔小新

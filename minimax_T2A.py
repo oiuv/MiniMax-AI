@@ -138,7 +138,7 @@ if __name__ == "__main__":
     """
     # 列出所有可用的 voice_id
     system_voice = ['male-qn-qingse', 'male-qn-jingying', 'male-qn-badao', 'male-qn-daxuesheng', 'female-shaonv', 'female-yujie', 'female-chengshu', 'female-tianmei', 'presenter_male', 'presenter_female', 'audiobook_male_1', 'audiobook_male_2', 'audiobook_female_1', 'audiobook_female_2', 'male-qn-qingse-jingpin', 'male-qn-jingying-jingpin', 'male-qn-badao-jingpin', 'male-qn-daxuesheng-jingpin', 'female-shaonv-jingpin', 'female-yujie-jingpin', 'female-chengshu-jingpin', 'female-tianmei-jingpin', 'clever_boy', 'cute_boy', 'lovely_girl', 'cartoon_pig', 'bingjiao_didi', 'junlang_nanyou', 'chunzhen_xuedi', 'lengdan_xiongzhang', 'badao_shaoye', 'tianxin_xiaoling', 'qiaopi_mengmei', 'wumei_yujie', 'diadia_xuemei', 'danya_xuejie', 'Santa_Claus ', 'Grinch', 'Rudolph', 'Arnold', 'Charming_Santa', 'Charming_Lady', 'Sweet_Girl', 'Cute_Elf', 'Attractive_Girl', 'Serene_Woman']
-    voice_ids = ['TV-m01_hd']
+    voice_ids = ['MyVoice01_hd']
 
     # 循环遍历每个 voice_id，生成并保存音频
     for voice_id in voice_ids:
