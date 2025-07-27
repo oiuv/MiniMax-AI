@@ -142,7 +142,12 @@ class MiniMaxClient:
             return f"处理响应时出错: {e}"
     
     def generate_image(self, prompt: str, aspect_ratio: str = "16:9", n: int = 1) -> list:
-        """图像生成"""
+        """图像生成 - 支持最新图像模型
+        
+        支持模型:
+        - image-01: 画面表现细腻，支持文生图、图生图
+        - image-01-live: 手绘、卡通画风增强
+        """
         data = {
             "model": "image-01",
             "prompt": prompt,
@@ -157,13 +162,20 @@ class MiniMaxClient:
         if 'data' in response:
             return [img['url'] for img in response['data']]
         elif 'task_id' in response:
-            # 某些接口返回task_id，需要轮询
             return [f"任务已提交: {response['task_id']}"]
         else:
             return [str(response)]
     
-    def generate_video(self, prompt: str, model: str = "T2V-01-Director") -> str:
-        """视频生成"""
+    def generate_video(self, prompt: str, model: str = "MiniMax-Hailuo-02") -> str:
+        """视频生成 - 支持最新视频模型
+        
+        支持模型:
+        - MiniMax-Hailuo-02: 新一代1080P超清视频，10秒生成
+        - T2V-01-Director: 文生视频导演版，支持运镜指令
+        - I2V-01-Director: 图生视频导演版，支持参考图片
+        - I2V-01-live: 图生视频，卡通漫画风格增强
+        - S2V-01: 主体参考视频，保持人物稳定性
+        """
         data = {"prompt": prompt, "model": model}
         
         response = self._make_request("POST", "video_generation", json=data)
@@ -175,10 +187,15 @@ class MiniMaxClient:
     
     def generate_music(self, lyrics: str, refer_voice: str = None, 
                       refer_instrumental: str = None, refer_vocal: str = None) -> str:
-        """音乐生成"""
+        """音乐生成 - 支持最新音乐模型
+        
+        支持模型:
+        - music-1.5: 支持音乐描述和歌词生成
+        - music-01: 支持上传音乐文件，通过干声和伴奏生成
+        """
         payload = {
             'lyrics': lyrics,
-            'model': 'music-01',
+            'model': 'music-1.5',  # 使用最新版本
             'audio_setting': '{"sample_rate":44100,"bitrate":256000,"format":"mp3"}'
         }
         
@@ -194,7 +211,14 @@ class MiniMaxClient:
     
     def clone_voice(self, file_id: str, voice_id: str, text: str, 
                    model: str = "speech-02-hd") -> Dict[str, Any]:
-        """语音克隆"""
+        """语音克隆 - 支持最新语音模型
+        
+        支持模型:
+        - speech-02-hd: 持续更新的HD模型，出色韵律和复刻相似度
+        - speech-02-turbo: 持续更新的Turbo模型，小语种能力加强
+        - speech-01-hd: 稳定版本HD模型，超高复刻相似度
+        - speech-01-turbo: 稳定版本Turbo模型，生成速度快
+        """
         data = {
             "file_id": int(file_id),
             "voice_id": voice_id,

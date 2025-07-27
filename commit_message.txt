@@ -1,16 +1,8 @@
-feat: 创建统一MiniMax AI命令行工具
+feat: 全面更新为MiniMax官方最新模型
 
-- 整合所有零散脚本为统一的minimax_cli.py
-- 添加交互式用户界面，支持菜单导航
-- 基于官方API文档更新聊天功能，支持abab系列模型
-- 添加自动配置向导和友好的错误处理
-- 提供命令行和交互双重使用模式
-- 创建安装脚本和完整文档
-- 优化用户体验，支持彩色输出和进度显示
-
-主要文件：
-- minimax_cli.py: 主程序
-- setup.py: 安装脚本
-- requirements.txt: 依赖列表
-- README.md: 使用文档
-- start.bat: Windows启动脚本
+- 文本生成：使用MiniMax-Text-01和MiniMax-M1（1M tokens）
+- 语音合成：支持speech-02-hd/turbo和speech-01-hd/turbo全系列
+- 视频生成：支持MiniMax-Hailuo-02、T2V/I2V/S2V全系列
+- 图像生成：支持image-01和image-01-live
+- 音乐生成：支持music-1.5和music-01
+- 更新所有文档和界面，确保与官方最新文档一致
