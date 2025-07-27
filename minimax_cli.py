@@ -159,7 +159,11 @@ class MiniMaxClient:
         
         response = self._make_request("POST", "image_generation", json=data)
         
-        if 'data' in response:
+        # 修复：正确处理响应格式
+        if 'data' in response and 'image_urls' in response['data']:
+            return response['data']['image_urls']
+        elif 'data' in response and isinstance(response['data'], list):
+            # 兼容旧格式
             return [img['url'] for img in response['data']]
         elif 'task_id' in response:
             return [f"任务已提交: {response['task_id']}"]
@@ -184,6 +188,30 @@ class MiniMaxClient:
     def query_video_status(self, task_id: str) -> Dict[str, Any]:
         """查询视频生成状态"""
         return self._make_request("GET", f"query/video_generation?task_id={task_id}")
+    
+    def download_file(self, file_id: str, filename: str = None, file_type: str = "video") -> str:
+        """下载文件（视频/音频/图像）"""
+        if not filename:
+            ext = {
+                "video": "mp4",
+                "audio": "mp3", 
+                "image": "jpg"
+            }.get(file_type, "bin")
+            filename = f"{file_type}_{file_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
+        
+        response = self._make_request("GET", f"files/retrieve?file_id={file_id}")
+        download_url = response['file']['download_url']
+        
+        # 下载文件
+        import requests
+        file_data = requests.get(download_url).content
+        
+        # 保存到文件
+        filepath = os.path.join(os.getcwd(), filename)
+        with open(filepath, 'wb') as f:
+            f.write(file_data)
+        
+        return filepath
     
     def generate_music(self, lyrics: str, refer_voice: str = None, 
                       refer_instrumental: str = None, refer_vocal: str = None) -> str:
@@ -318,11 +346,23 @@ class InteractiveUI:
         """视频生成界面"""
         console.print(Panel.fit("[bold magenta]🎬 视频生成[/bold magenta]"))
         
+        # 模型选择
+        models = [
+            "MiniMax-Hailuo-02 (1080P超清，10秒生成)",
+            "T2V-01-Director (文生视频导演版)",
+            "I2V-01-Director (图生视频导演版)",
+            "I2V-01-live (卡通漫画增强)",
+            "S2V-01 (主体参考)"
+        ]
+        
+        model_choice = inquirer.list_input("选择视频模型", choices=models)
+        selected_model = model_choice.split(' ')[0]
+        
         prompt = Prompt.ask("请输入视频描述")
         
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("提交任务...", total=None)
-            task_id = self.client.generate_video(prompt)
+            task_id = self.client.generate_video(prompt, selected_model)
             progress.update(task, completed=True)
         
         console.print(f"[yellow]任务已提交，ID: {task_id}[/yellow]")
@@ -334,7 +374,15 @@ class InteractiveUI:
             
             if status['status'] == 'Success':
                 console.print(f"[green]视频生成完成！[/green]")
-                console.print(f"下载链接: {status['file_id']}")
+                
+                # 自动下载
+                filename = f"video_{task_id}.mp4"
+                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
+                    download_task = progress.add_task("下载视频中...", total=None)
+                    filepath = self.client.download_file(status['file_id'], filename, "video")
+                    progress.update(download_task, completed=True)
+                
+                console.print(f"[green]视频已下载: {filepath}[/green]")
                 break
             elif status['status'] == 'Fail':
                 console.print("[red]视频生成失败[/red]")
