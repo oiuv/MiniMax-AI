@@ -1,0 +1,16 @@
+feat: 创建统一MiniMax AI命令行工具
+
+- 整合所有零散脚本为统一的minimax_cli.py
+- 添加交互式用户界面，支持菜单导航
+- 基于官方API文档更新聊天功能，支持abab系列模型
+- 添加自动配置向导和友好的错误处理
+- 提供命令行和交互双重使用模式
+- 创建安装脚本和完整文档
+- 优化用户体验，支持彩色输出和进度显示
+
+主要文件：
+- minimax_cli.py: 主程序
+- setup.py: 安装脚本
+- requirements.txt: 依赖列表
+- README.md: 使用文档
+- start.bat: Windows启动脚本
