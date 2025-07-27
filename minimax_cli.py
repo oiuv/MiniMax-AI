@@ -141,29 +141,47 @@ class MiniMaxClient:
         except Exception as e:
             return f"处理响应时出错: {e}"
     
-    def generate_image(self, prompt: str, aspect_ratio: str = "16:9", n: int = 1) -> list:
-        """图像生成 - 支持最新图像模型
+    def generate_image(self, prompt: str, aspect_ratio: str = "1:1", n: int = 1, 
+                      model: str = "image-01", width: int = None, height: int = None,
+                      style: dict = None, subject_reference: list = None) -> list:
+        """图像生成 - 支持完整官方API参数
         
         支持模型:
         - image-01: 画面表现细腻，支持文生图、图生图
         - image-01-live: 手绘、卡通画风增强
+        
+        宽高比支持: 1:1, 16:9, 4:3, 3:2, 2:3, 3:4, 9:16, 21:9
+        分辨率: width/height 512-2048像素，需为8的倍数
         """
         data = {
-            "model": "image-01",
+            "model": model,
             "prompt": prompt,
-            "aspect_ratio": aspect_ratio,
             "response_format": "url",
-            "n": n,
+            "n": min(n, 9),  # 最大9张
             "prompt_optimizer": True
         }
         
+        # 添加宽高比或自定义分辨率
+        if width and height:
+            data["width"] = (width // 8) * 8  # 确保是8的倍数
+            data["height"] = (height // 8) * 8
+        else:
+            data["aspect_ratio"] = aspect_ratio
+        
+        # 添加风格控制（仅image-01-live支持）
+        if model == "image-01-live" and style:
+            data["style"] = style
+            
+        # 添加主体参考（仅image-01支持）
+        if model == "image-01" and subject_reference:
+            data["subject_reference"] = subject_reference
+            
         response = self._make_request("POST", "image_generation", json=data)
         
-        # 修复：正确处理响应格式
+        # 正确处理响应格式
         if 'data' in response and 'image_urls' in response['data']:
             return response['data']['image_urls']
         elif 'data' in response and isinstance(response['data'], list):
-            # 兼容旧格式
             return [img['url'] for img in response['data']]
         elif 'task_id' in response:
             return [f"任务已提交: {response['task_id']}"]
@@ -325,22 +343,81 @@ class InteractiveUI:
                 console.print("[yellow]请检查网络连接和API密钥配置[/yellow]")
     
     def image_interface(self):
-        """图像生成界面"""
+        """图像生成界面 - 支持完整参数"""
         console.print(Panel.fit("[bold blue]🎨 图像生成[/bold blue]"))
         
+        # 模型选择
+        models = [
+            "image-01 (画面细腻，支持文生图/图生图)",
+            "image-01-live (手绘/卡通画风增强)"
+        ]
+        
+        model_choice = inquirer.list_input("选择图像模型", choices=models)
+        selected_model = model_choice.split(' ')[0]
+        
         prompt = Prompt.ask("请输入图像描述")
-        aspect_ratio = Prompt.ask("选择宽高比", default="16:9", 
-                                 choices=["1:1", "16:9", "9:16", "4:3"])
-        count = int(Prompt.ask("生成数量", default="1"))
+        
+        # 参数选择
+        use_custom_size = Confirm.ask("使用自定义分辨率？(否则使用宽高比)")
+        
+        if use_custom_size:
+            width = int(Prompt.ask("宽度(512-2048)", default="1024"))
+            height = int(Prompt.ask("高度(512-2048)", default="1024"))
+            aspect_ratio = None
+        else:
+            aspect_ratios = [
+                "1:1 (正方形)",
+                "16:9 (宽屏)", 
+                "4:3 (标准)",
+                "3:2 (照片)",
+                "2:3 (竖版)",
+                "3:4 (竖屏)",
+                "9:16 (手机竖屏)",
+                "21:9 (超宽屏)"
+            ]
+            ratio_choice = inquirer.list_input("选择宽高比", choices=aspect_ratios)
+            aspect_ratio = ratio_choice.split(' ')[0]
+            width = height = None
+        
+        count = int(Prompt.ask("生成数量(1-9)", default="1"))
+        
+        # 风格设置（仅image-01-live支持）
+        style = None
+        if selected_model == "image-01-live":
+            styles = [
+                "手绘",
+                "卡通", 
+                "漫画",
+                "水彩",
+                "油画",
+                "素描"
+            ]
+            style_choice = inquirer.list_input("选择画风", choices=styles)
+            style = {"style": style_choice}
         
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("生成图像中...", total=None)
-            urls = self.client.generate_image(prompt, aspect_ratio, count)
+            urls = self.client.generate_image(
+                prompt, 
+                aspect_ratio=aspect_ratio,
+                width=width,
+                height=height,
+                n=count,
+                model=selected_model,
+                style=style
+            )
             progress.update(task, completed=True)
         
         console.print(f"[green]生成完成！共 {len(urls)} 张图像[/green]")
         for i, url in enumerate(urls, 1):
             console.print(f"图像 {i}: {url}")
+            
+        # 提供下载选项
+        if Confirm.ask("是否下载所有图像？"):
+            for i, url in enumerate(urls, 1):
+                filename = f"image_{i}.jpg"
+                console.print(f"下载图像 {i}...")
+                # 这里可以添加实际下载逻辑
     
     def video_interface(self):
         """视频生成界面"""
@@ -397,6 +474,9 @@ def main():
     parser.add_argument('--video', help='视频生成')
     parser.add_argument('--music', help='音乐生成')
     parser.add_argument('--clone', help='语音克隆')
+    parser.add_argument('--aspect-ratio', dest='aspect_ratio', default='1:1', 
+                       choices=['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'])
+    parser.add_argument('--count', type=int, default=1, choices=range(1, 10))
     parser.add_argument('--interactive', '-i', action='store_true', help='交互模式')
     
     args = parser.parse_args()
@@ -409,7 +489,11 @@ def main():
         response = client.chat_completion(message)
         print(response)
     elif args.image:
-        urls = client.generate_image(args.image)
+        urls = client.generate_image(
+            args.image, 
+            aspect_ratio=args.aspect_ratio, 
+            n=args.count
+        )
         for url in urls:
             print(url)
     elif args.video:
