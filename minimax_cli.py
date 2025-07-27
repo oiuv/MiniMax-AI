@@ -92,14 +92,14 @@ class MiniMaxClient:
                 print(f"错误: {e}")
             sys.exit(1)
     
-    def chat_completion(self, message: str, model: str = "abab5.5-chat", stream: bool = False) -> str:
-        """智能对话 - 基于官方API文档
+    def chat_completion(self, message: str, model: str = "MiniMax-Text-01", stream: bool = False) -> str:
+        """智能对话 - 基于最新官方API文档
         
-        支持的模型:
-        - abab6.5s-chat: 最新版本，支持复杂对话
-        - abab6.5-chat: 标准版本，平衡性能与成本  
-        - abab5.5s-chat: 轻量版本，响应速度快
-        - abab5.5-chat: 基础版本，成本优化
+        支持的最新模型:
+        - MiniMax-Text-01: 最新文本生成模型，最大token数 1,000,192
+        - MiniMax-M1: 高性能文本模型，最大token数 1,000,192
+        
+        注意：原abab系列模型已升级为MiniMax-Text-01和MiniMax-M1
         """
         import requests
         
@@ -232,12 +232,10 @@ class InteractiveUI:
         """对话界面"""
         console.print(Panel.fit("[bold green]💬 智能对话[/bold green]"))
         
-        # 模型选择
+        # 模型选择 - 更新为最新模型
         models = [
-            "abab6.5s-chat (最新版本，支持复杂对话)",
-            "abab6.5-chat (标准版本，平衡性能与成本)",
-            "abab5.5s-chat (轻量版本，响应速度快)",
-            "abab5.5-chat (基础版本，成本优化)"
+            "MiniMax-Text-01 (最新文本生成模型，最大token数1,000,192)",
+            "MiniMax-M1 (高性能文本模型，最大token数1,000,192)"
         ]
         
         model_choice = inquirer.list_input(
