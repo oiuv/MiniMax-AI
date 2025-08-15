@@ -199,28 +199,28 @@ class PodcastGenerator:
                     text = "感谢您的收听，这是播客的一段内容。"
                 
                 print(f"正在生成第{i+1}段音频 ({voice_id})...")
+                # 确保voice_id不为空
+                safe_voice_id = voice_id or "female-chengshu"
+                print(f"DEBUG: 使用音色: {safe_voice_id}")
                 audio_data = self.client.text_to_speech(
                     text=text.strip(),
-                    voice_id=voice_id,
-                    model=model,
-                    speed=1.0
+                    voice_id=safe_voice_id,
+                    model=model
                 )
                 
                 # 保存音频文件
                 filename = f"segment_{i+1}_{voice_id}_{datetime.now().strftime('%H%M%S')}.mp3"
                 filepath = self.output_dir / filename
                 
-                # 处理音频数据（可能是base64字符串或字节数据）
+                # 处理音频数据（十六进制字符串转二进制）
                 import base64
-                try:
-                    # 尝试base64解码
-                    decoded_data = base64.b64decode(audio_data)
-                except:
-                    # 如果已经是字节数据，直接使用
-                    if isinstance(audio_data, str):
-                        decoded_data = base64.b64decode(audio_data)
-                    else:
-                        decoded_data = audio_data
+                
+                # API返回的是十六进制字符串
+                if isinstance(audio_data, str):
+                    # 解码十六进制字符串为二进制数据
+                    decoded_data = bytes.fromhex(audio_data)
+                else:
+                    decoded_data = audio_data
                 
                 with open(filepath, 'wb') as f:
                     f.write(decoded_data)

@@ -72,10 +72,18 @@ class MiniMaxClient:
         if 't2a_v2' in endpoint or 'voice_clone' in endpoint:
             url += f"?GroupId={self.group_id}"
         
+        # 调试：打印完整请求信息
+        print(f"DEBUG: 请求URL: {url}")
+        print(f"DEBUG: 请求头: {headers}")
+        print(f"DEBUG: 请求数据: {kwargs}")
+        
         try:
             response = requests.request(method, url, headers=headers, **kwargs)
             response.raise_for_status()
             result = response.json()
+            
+            # 调试：打印响应
+            print(f"DEBUG: 响应: {result}")
             
             # 检查API错误
             if 'base_resp' in result and result['base_resp']['status_code'] != 0:
@@ -236,30 +244,32 @@ class MiniMaxClient:
         return filepath
     
     def text_to_speech(self, text: str, voice_id: str = "female-chengshu", 
-                      model: str = "speech-2.5-hd-preview", speed: float = 1.0, 
-                      pitch: float = 0.0, volume: float = 1.0) -> str:
-        """文本转语音 - 支持最新Speech 2.5模型"""
+                      model: str = "speech-02-hd") -> str:
+        """文本转语音 - 基于官方TTS v2 API文档"""
         if not text or not text.strip():
             raise ValueError("文本内容不能为空")
-            
+        
+        # 正确的TTS v2参数结构
         data = {
             "model": model,
             "text": text.strip(),
-            "voice_id": voice_id,
-            "speed": float(max(0.5, min(2.0, speed))),
-            "pitch": float(max(-1.0, min(1.0, pitch))),
-            "volume": float(max(0.0, min(2.0, volume))),
+            "voice_setting": {
+                "voice_id": voice_id,
+                "speed": 1.0,
+                "vol": 3.0,
+                "pitch": 0
+            }
         }
-        
-        # 移除可能为空的参数
-        if speed == 1.0:
-            data.pop("speed", None)
-        if pitch == 0.0:
-            data.pop("pitch", None)
-        if volume == 1.0:
-            data.pop("volume", None)
             
         response = self._make_request("POST", "t2a_v2", json=data)
+        
+        # 检查响应格式
+        if 'data' in response and 'audio' in response['data']:
+            return response['data']['audio']
+        elif 'audio' in response:
+            return response['audio']
+        else:
+            raise ValueError(f"API响应格式错误: {response}")
         
         # 检查响应格式
         if 'data' in response and 'audio' in response['data']:
