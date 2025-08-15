@@ -7,28 +7,32 @@
 ### 1. 文本生成（聊天）
 **接口**: 文本-文本生成（聊天）  
 **文档**: https://platform.minimaxi.com/document/对话?key=66701d281d57f38758d581d0  
-**基础URL**: https://api.minimax.chat/v1
+**接口地址**: https://api.minimaxi.com/v1/text/chatcompletion_v2
 
 ### 2. 语音合成
-**同步接口**: https://platform.minimaxi.com/document/同步语音合成?key=66719005a427f0c8a5701643  
-**异步接口**: https://platform.minimaxi.com/document/异步长文本语音合成?key=66b3559f290299a26b2347d2
+**同步接口**: https://api.minimaxi.com/v1/t2a_v2  
+**异步接口**: https://api.minimaxi.com/v1/t2a_async_v2
 
 ### 3. 语音克隆
-**快速复刻**: https://platform.minimaxi.com/document/快速复刻?key=66719032a427f0c8a570165b  
-**音色设计**: https://platform.minimaxi.com/document/voice_design?key=669f5af198ff2c57eeb9a0f0
+**快速复刻**: https://api.minimaxi.com/v1/voice_clone  
+**音色设计**: https://api.minimaxi.com/v1/voice_design
 
 ### 4. 视频生成
-**视频生成**: https://platform.minimaxi.com/document/video_generation?key=66d1439376e52fcee2853049  
-**视频生成Agent**: https://platform.minimaxi.com/document/template?key=68747c38b9b3965c7e4f72da
+**视频生成**: https://api.minimaxi.com/v1/video_generation  
+**视频生成Agent**: https://api.minimaxi.com/v1/video_template_generation
 
 ### 5. 音乐生成
-**接口**: https://platform.minimaxi.com/document/Music%20Generation?key=667cd92e3be2027f69b723dd
+**接口**: https://api.minimaxi.com/v1/music_generation
 
 ### 6. 图像生成
-**接口**: https://platform.minimaxi.com/document/vffrKguXhEQoELeH2hVECJnd?key=67b03bdcdd0f18b80647241
+**接口**: https://api.minimaxi.com/v1/image_generation
 
 ### 7. 文件管理
-**接口**: https://platform.minimaxi.com/document/file?key=6685458335a2d55137ca9681
+**上传接口**: https://api.minimaxi.com/v1/files/upload
+**列出接口**: https://api.minimaxi.com/v1/files/list
+**检索接口**: https://api.minimaxi.com/v1/files/retrieve
+**删除接口**: https://api.minimaxi.com/v1/files/delete
+**下载接口**: https://api.minimaxi.com/v1/files/retrieve_content
 
 ## 🤖 最新模型列表（2025年8月6日更新）
 

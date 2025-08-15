@@ -33,7 +33,7 @@ class MiniMaxClient:
     def __init__(self):
         self.group_id = os.getenv('MINIMAX_GROUP_ID')
         self.api_key = os.getenv('MINIMAX_API_KEY')
-        self.base_url = "https://api.minimax.chat/v1"
+        self.base_url = "https://api.minimaxi.com/v1"
         
         if not self.group_id or not self.api_key:
             self._setup_credentials()
@@ -67,6 +67,10 @@ class MiniMaxClient:
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
+        
+        # 添加GroupId到查询参数（如果需要）
+        if 't2a_v2' in endpoint or 'voice_clone' in endpoint:
+            url += f"?GroupId={self.group_id}"
         
         try:
             response = requests.request(method, url, headers=headers, **kwargs)
@@ -231,7 +235,41 @@ class MiniMaxClient:
         
         return filepath
     
-    def generate_music(self, lyrics: str, refer_voice: str = None, 
+    def text_to_speech(self, text: str, voice_id: str = "female-chengshu", 
+                      model: str = "speech-2.5-hd-preview", speed: float = 1.0, 
+                      pitch: float = 0.0, volume: float = 1.0) -> str:
+        """文本转语音 - 支持最新Speech 2.5模型"""
+        if not text or not text.strip():
+            raise ValueError("文本内容不能为空")
+            
+        data = {
+            "model": model,
+            "text": text.strip(),
+            "voice_id": voice_id,
+            "speed": float(max(0.5, min(2.0, speed))),
+            "pitch": float(max(-1.0, min(1.0, pitch))),
+            "volume": float(max(0.0, min(2.0, volume))),
+        }
+        
+        # 移除可能为空的参数
+        if speed == 1.0:
+            data.pop("speed", None)
+        if pitch == 0.0:
+            data.pop("pitch", None)
+        if volume == 1.0:
+            data.pop("volume", None)
+            
+        response = self._make_request("POST", "t2a_v2", json=data)
+        
+        # 检查响应格式
+        if 'data' in response and 'audio' in response['data']:
+            return response['data']['audio']
+        elif 'audio' in response:
+            return response['audio']
+        else:
+            raise ValueError(f"API响应格式错误: {response}")
+
+    def generate_music(self, prompt: str, lyrics: str = None, refer_voice: str = None, 
                       refer_instrumental: str = None, refer_vocal: str = None) -> str:
         """音乐生成 - 支持最新音乐模型
         
@@ -240,10 +278,17 @@ class MiniMaxClient:
         - music-01: 支持上传音乐文件，通过干声和伴奏生成
         """
         payload = {
-            'lyrics': lyrics,
-            'model': 'music-1.5',  # 使用最新版本
-            'audio_setting': '{"sample_rate":44100,"bitrate":256000,"format":"mp3"}'
+            'model': 'music-1.5',
+            'prompt': prompt,
+            'audio_setting': {
+                'sample_rate': 44100,
+                'bitrate': 256000,
+                'format': 'mp3'
+            }
         }
+        
+        if lyrics:
+            payload['lyrics'] = lyrics
         
         if refer_voice:
             payload['refer_voice'] = refer_voice
@@ -274,6 +319,136 @@ class MiniMaxClient:
         
         return self._make_request("POST", f"voice_clone?GroupId={self.group_id}", json=data)
 
+class PodcastUI:
+    def __init__(self, client: MiniMaxClient):
+        self.client = client
+        try:
+            from minimax_podcast import PodcastGenerator
+            self.generator = PodcastGenerator(client)
+        except ImportError:
+            console.print("[red]播客模块未找到，请确保 minimax_podcast.py 存在[/red]")
+            self.generator = None
+    
+    def show_podcast_menu(self):
+        """显示播客菜单"""
+        if not self.generator:
+            console.print("[red]播客功能暂不可用[/red]")
+            return
+            
+        console.print(Panel.fit("[bold purple]🎙️ 电台播客生成器[/bold purple]"))
+        
+        # 场景选择
+        scenes = {
+            "solo": "单人主播 - 温暖亲切的独白",
+            "dialogue": "双人对话 - 轻松自然的讨论", 
+            "panel": "多人圆桌 - 专业深入的论坛",
+            "news": "新闻播报 - 正式权威的时事",
+            "storytelling": "故事讲述 - 情感丰富的叙事"
+        }
+        
+        scene_choices = [f"{key}: {desc}" for key, desc in scenes.items()]
+        questions = [
+            inquirer.List('scene',
+                         message="选择播客场景",
+                         choices=scene_choices)
+        ]
+        
+        scene_choice = inquirer.prompt(questions)['scene']
+        scene = scene_choice.split(':')[0]
+        
+        # 主题输入
+        topic = Prompt.ask("播客主题")
+        
+        # 时长选择
+        duration = int(Prompt.ask("时长(分钟)", default="10"))
+        
+        # 音色选择
+        use_custom_voices = Confirm.ask("自定义音色？(否则使用推荐音色)")
+        custom_voices = None
+        
+        if use_custom_voices:
+            speaker_count = 1 if scene == "solo" else (2 if scene == "dialogue" else 3)
+            custom_voices = []
+            
+            # 显示音色分类
+            categories = list(self.generator.VOICE_CATEGORIES.keys())
+            
+            for i in range(speaker_count):
+                console.print(f"\n[bold]为说话人{i+1}选择音色:[/bold]")
+                
+                # 选择分类
+                category_choice = inquirer.list_input(
+                    "音色分类",
+                    choices=categories
+                )
+                
+                # 选择具体音色
+                voices = self.generator.VOICE_CATEGORIES[category_choice]
+                voice_choices = [f"{desc} ({voice_id})" for voice_id, desc in voices.items()]
+                
+                voice_choice = inquirer.list_input(
+                    f"说话人{i+1}音色",
+                    choices=voice_choices
+                )
+                
+                voice_id = voice_choice.split('(')[-1].rstrip(')')
+                custom_voices.append(voice_id)
+                console.print(f"[green]已选择: {voice_choice}[/green]")
+        
+        # 模型选择
+        models = [
+            "speech-2.5-hd-preview (极致相似度，2025-08-06发布)",
+            "speech-2.5-turbo-preview (支持40个语种)",
+            "speech-02-hd (出色韵律)",
+            "speech-01-hd (超高复刻度)"
+        ]
+        
+        model_choice = inquirer.list_input("选择语音模型", choices=models)
+        model = model_choice.split(' ')[0]
+        
+        # 开始生成
+        console.print(f"[yellow]正在生成{scene}播客: {topic}[/yellow]")
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("生成播客中...", total=None)
+            
+            result = self.generator.generate_podcast(
+                topic=topic,
+                scene=scene,
+                custom_voices=custom_voices,
+                duration=duration,
+                model=model
+            )
+            
+            progress.update(task, completed=True)
+        
+        if result:
+            console.print(f"[green]✅ 播客生成完成: {result}[/green]")
+            
+            # 提供播放选项
+            if Confirm.ask("是否播放播客？"):
+                try:
+                    import subprocess
+                    import platform
+                    
+                    if platform.system() == "Windows":
+                        os.startfile(result)
+                    elif platform.system() == "Darwin":  # macOS
+                        subprocess.call(["open", result])
+                    else:  # Linux
+                        subprocess.call(["xdg-open", result])
+                        
+                except Exception as e:
+                    console.print(f"[yellow]无法自动播放: {e}[/yellow]")
+                    console.print(f"[dim]文件位置: {result}[/dim]")
+        else:
+            console.print("[red]播客生成失败[/red]")
+
+
 class InteractiveUI:
     def __init__(self, client: MiniMaxClient):
         self.client = client
@@ -286,6 +461,7 @@ class InteractiveUI:
             "🎬 视频生成",
             "🎵 音乐生成",
             "🎤 语音克隆",
+            "🎙️ 电台播客",
             "📁 文件管理",
             "❌ 退出"
         ]
@@ -478,6 +654,10 @@ def main():
                        choices=['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'])
     parser.add_argument('--count', type=int, default=1, choices=range(1, 10))
     parser.add_argument('--interactive', '-i', action='store_true', help='交互模式')
+    parser.add_argument('--podcast', help='生成播客 (主题内容)')
+    parser.add_argument('--scene', choices=['solo', 'dialogue', 'panel', 'news', 'storytelling'], 
+                       default='solo', help='播客场景')
+    parser.add_argument('--voice', action='append', help='自定义音色 (可多次使用)')
     
     args = parser.parse_args()
     
@@ -500,8 +680,31 @@ def main():
         task_id = client.generate_video(args.video)
         print(f"任务ID: {task_id}")
     elif args.music:
-        audio_data = client.generate_music(args.music)
+        # 使用用户输入作为prompt，可选提供歌词
+        audio_data = client.generate_music(
+            prompt=args.music,
+            lyrics="欢迎收听友彩伴您节目\n让我们一起分享精彩时光"
+        )
         print(f"音乐数据已生成，长度: {len(audio_data)}")
+    elif args.podcast:
+        try:
+            from minimax_podcast import PodcastGenerator
+            generator = PodcastGenerator(client)
+            
+            result = generator.generate_podcast(
+                topic=args.podcast,
+                scene=args.scene,
+                custom_voices=args.voice,
+                duration=10
+            )
+            
+            if result:
+                print(f"播客生成完成: {result}")
+            else:
+                print("播客生成失败")
+                
+        except ImportError as e:
+            print(f"播客模块未找到: {e}")
     elif args.interactive or interactive_mode:
         if not interactive_mode:
             print("请先安装依赖: pip install inquirer rich")
@@ -522,6 +725,9 @@ def main():
                 print("音乐生成功能开发中...")
             elif "语音克隆" in choice:
                 print("语音克隆功能开发中...")
+            elif "电台播客" in choice:
+                podcast_ui = PodcastUI(self.client)
+                podcast_ui.show_podcast_menu()
             elif "退出" in choice:
                 console.print("[yellow]感谢使用！[/yellow]")
                 break

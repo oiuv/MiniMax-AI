@@ -45,15 +45,15 @@ python start.bat
 
 ### 1. 文本生成（聊天）
 - **接口地址**: https://platform.minimaxi.com/document/对话?key=66701d281d57f38758d581d0
-- **基础URL**: https://api.minimax.chat/v1
+- **接口地址**: https://api.minimaxi.com/v1/text/chatcompletion_v2
 - **认证方式**: Bearer Token (MINIMAX_API_KEY)
 - **模型列表**:
   - **MiniMax-M1**: 全球领先，80K思维链 × 1M输入
   - **MiniMax-Text-01**: 全新架构，支持1M超长上下文
 
 ### 2. 语音合成
-- **同步接口**: https://platform.minimaxi.com/document/同步语音合成?key=66719005a427f0c8a5701643
-- **异步接口**: https://platform.minimaxi.com/document/异步长文本语音合成?key=66b3559f290299a26b2347d2
+- **同步接口**: https://api.minimaxi.com/v1/t2a_v2?GroupId={YOUR_GROUP_ID}
+- **异步接口**: https://api.minimaxi.com/v1/t2a_async_v2?GroupId={YOUR_GROUP_ID}
 - **最新模型** (2025年8月6日发布):
   - **speech-2.5-hd-preview**: 极致相似度，韵律表现出色
   - **speech-2.5-turbo-preview**: 支持40个语种
@@ -62,13 +62,35 @@ python start.bat
   - **speech-01-hd**: 超高复刻相似度
   - **speech-01-turbo**: 快速生成
 
+### 测试规范（必须遵守）
+**测试流程：**
+1. **用户运行测试**：所有测试必须由用户在真实环境中运行
+2. **结果确认**：测试后必须提供明确的成功/失败结果
+3. **直接反馈**：不创建无意义的测试脚本
+
+**播客功能测试步骤：**
+```bash
+# 测试1：基础播客生成
+python minimax_cli.py --podcast "AI如何改变未来工作方式"
+
+# 测试2：指定场景和音色
+python minimax_cli.py --podcast "科技热点" --scene dialogue --voice male-qn-jingying --voice female-yujie
+
+# 测试3：交互式播客生成
+python minimax_cli.py --interactive  # 选择电台播客功能
+```
+
+**预期结果：**
+- 成功：播客文件保存在 `./podcasts/` 目录
+- 失败：提供具体错误信息
+
 ### 3. 语音克隆
-- **快速复刻**: https://platform.minimaxi.com/document/快速复刻?key=66719032a427f0c8a570165b
-- **音色设计**: https://platform.minimaxi.com/document/voice_design?key=669f5af198ff2c57eeb9a0f0
+- **快速复刻**: https://api.minimaxi.com/v1/voice_clone
+- **音色设计**: https://api.minimaxi.com/v1/voice_design
 
 ### 4. 视频生成
-- **视频生成**: https://platform.minimaxi.com/document/video_generation?key=66d1439376e52fcee2853049
-- **视频生成Agent**: https://platform.minimaxi.com/document/template?key=68747c38b9b3965c7e4f72da
+- **视频生成**: https://api.minimaxi.com/v1/video_generation
+- **视频生成Agent**: https://api.minimaxi.com/v1/video_template_generation
 - **模型列表**:
   - **MiniMax-Hailuo-02**: 1080P超清，10秒视频
   - **T2V-01-Director**: 文生视频导演版
@@ -77,15 +99,19 @@ python start.bat
   - **S2V-01**: 主体参考视频生成
 
 ### 5. 音乐生成
-- **接口文档**: https://platform.minimaxi.com/document/Music%20Generation?key=667cd92e3be2027f69b723dd
+- **接口地址**: https://api.minimaxi.com/v1/music_generation
 - **支持模型**: music-1.5, music-01
 
 ### 6. 图像生成
-- **接口文档**: https://platform.minimaxi.com/document/vffrKguXhEQoELeH2hVECJnd?key=67b03bdcdd0f18b80647241
+- **接口地址**: https://api.minimaxi.com/v1/image_generation
 - **支持模型**: image-01, image-01-live
 
 ### 7. 文件管理
-- **接口文档**: https://platform.minimaxi.com/document/file?key=6685458335a2d55137ca9681
+- **上传接口**: https://api.minimaxi.com/v1/files/upload
+- **列出接口**: https://api.minimaxi.com/v1/files/list
+- **检索接口**: https://api.minimaxi.com/v1/files/retrieve
+- **删除接口**: https://api.minimaxi.com/v1/files/delete
+- **下载接口**: https://api.minimaxi.com/v1/files/retrieve_content
 
 ## 📦 依赖配置
 
