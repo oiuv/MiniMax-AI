@@ -72,31 +72,53 @@ class MiniMaxClient:
         if 't2a_v2' in endpoint or 'voice_clone' in endpoint:
             url += f"?GroupId={self.group_id}"
         
-        # 调试：打印完整请求信息
-        print(f"DEBUG: 请求URL: {url}")
-        print(f"DEBUG: 请求头: {headers}")
-        print(f"DEBUG: 请求数据: {kwargs}")
+        # 调试信息（仅显示关键信息，不显示敏感数据）
+        if 'json' in kwargs and 'text' in kwargs['json']:
+            text_preview = kwargs['json']['text'][:50] + "..." if len(kwargs['json']['text']) > 50 else kwargs['json']['text']
+            print(f"DEBUG: 请求URL: {url}")
+            print(f"DEBUG: 文本预览: {text_preview}")
+        else:
+            print(f"DEBUG: 请求URL: {url}")
         
         try:
-            response = requests.request(method, url, headers=headers, **kwargs)
-            response.raise_for_status()
-            result = response.json()
+            import time
+            max_retries = 3
+            base_delay = 2
             
-            # 调试：打印响应
-            print(f"DEBUG: 响应: {result}")
-            
-            # 检查API错误
-            if 'base_resp' in result and result['base_resp']['status_code'] != 0:
-                error_msg = result['base_resp'].get('status_msg', '未知错误')
-                raise Exception(f"API错误: {error_msg}")
-                
-            return result
-        except requests.exceptions.RequestException as e:
-            if interactive_mode:
-                console.print(f"[red]网络请求失败: {e}[/red]")
-            else:
-                print(f"网络请求失败: {e}")
-            sys.exit(1)
+            for attempt in range(max_retries):
+                try:
+                    response = requests.request(method, url, headers=headers, **kwargs)
+                    response.raise_for_status()
+                    result = response.json()
+                    
+                    # 检查API错误
+                    if 'base_resp' in result and result['base_resp']['status_code'] != 0:
+                        error_msg = result['base_resp'].get('status_msg', '未知错误')
+                        error_code = result['base_resp'].get('status_code', -1)
+                        
+                        # 频率限制，智能重试
+                        if error_code == 1002:  # 频率限制
+                            if attempt < max_retries - 1:
+                                delay = base_delay * (2 ** attempt)
+                                print(f"⚠️  请求频率限制，等待{delay}秒后重试...")
+                                time.sleep(delay)
+                                continue
+                            else:
+                                raise Exception("API频率限制，请稍后再试")
+                        else:
+                            raise Exception(f"API错误: {error_msg}")
+                    
+                    return result
+                    
+                except requests.exceptions.RequestException as e:
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"⚠️  网络请求失败，{delay}秒后重试...")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        raise
+                        
         except Exception as e:
             if interactive_mode:
                 console.print(f"[red]错误: {e}[/red]")
@@ -287,28 +309,34 @@ class MiniMaxClient:
         - music-1.5: 支持音乐描述和歌词生成
         - music-01: 支持上传音乐文件，通过干声和伴奏生成
         """
-        payload = {
-            'model': 'music-1.5',
-            'prompt': prompt,
-            'audio_setting': {
-                'sample_rate': 44100,
-                'bitrate': 256000,
-                'format': 'mp3'
-            }
+        # 确保歌词参数存在，使用默认歌词
+        default_lyrics = """[Intro]
+轻柔的背景音乐开始
+[Verse]
+这是一个美好的时刻
+让我们享受这段时光
+[Chorus]
+音乐带来温暖和力量
+[Bridge]
+感受每一个音符的跳动
+[Outro]
+音乐渐渐结束"""
+        
+        data = {
+            "model": "music-1.5",
+            "prompt": prompt,
+            "lyrics": lyrics or default_lyrics
         }
         
-        if lyrics:
-            payload['lyrics'] = lyrics
+        response = self._make_request("POST", "music_generation", json=data)
         
-        if refer_voice:
-            payload['refer_voice'] = refer_voice
-        if refer_instrumental:
-            payload['refer_instrumental'] = refer_instrumental
-        if refer_vocal:
-            payload['refer_vocal'] = refer_vocal
-        
-        response = self._make_request("POST", "music_generation", data=payload)
-        return response['data']['audio']
+        # 处理不同响应格式
+        if 'data' in response and 'audio' in response['data']:
+            return response['data']['audio']
+        elif 'audio' in response:
+            return response['audio']
+        else:
+            raise ValueError(f"音乐API响应格式错误: {response}")
     
     def clone_voice(self, file_id: str, voice_id: str, text: str, 
                    model: str = "speech-02-hd") -> Dict[str, Any]:
@@ -333,10 +361,10 @@ class PodcastUI:
     def __init__(self, client: MiniMaxClient):
         self.client = client
         try:
-            from minimax_podcast import PodcastGenerator
+            from podcast_system.podcast_generator import PodcastGenerator
             self.generator = PodcastGenerator(client)
-        except ImportError:
-            console.print("[red]播客模块未找到，请确保 minimax_podcast.py 存在[/red]")
+        except ImportError as e:
+            console.print(f"[red]播客模块未找到: {e}[/red]")
             self.generator = None
     
     def show_podcast_menu(self):
@@ -426,13 +454,18 @@ class PodcastUI:
         ) as progress:
             task = progress.add_task("生成播客中...", total=None)
             
-            result = self.generator.generate_podcast(
-                topic=topic,
-                scene=scene,
-                custom_voices=custom_voices,
-                duration=duration,
-                model=model
-            )
+            # 构建参数
+            kwargs = {
+                "topic": topic,
+                "scene": scene,
+                "duration": duration,
+                "show_progress": False  # 禁用内部进度条，使用rich进度条
+            }
+            
+            if custom_voices:
+                kwargs["voices"] = custom_voices
+            
+            result = self.generator.generate_podcast(**kwargs)
             
             progress.update(task, completed=True)
         
@@ -665,9 +698,16 @@ def main():
     parser.add_argument('--count', type=int, default=1, choices=range(1, 10))
     parser.add_argument('--interactive', '-i', action='store_true', help='交互模式')
     parser.add_argument('--podcast', help='生成播客 (主题内容)')
-    parser.add_argument('--scene', choices=['solo', 'dialogue', 'panel', 'news', 'storytelling'], 
+    parser.add_argument('--scene', choices=['solo', 'dialogue', 'panel', 'news', 'storytelling', 'interview'], 
                        default='solo', help='播客场景')
     parser.add_argument('--voice', action='append', help='自定义音色 (可多次使用)')
+    parser.add_argument('--role-name', action='append', dest='role_names', help='角色名称，与--voice一一对应 (可多次使用)')
+    parser.add_argument('--duration', type=int, default=5, help='播客时长(分钟，1-30)')
+    parser.add_argument('--music-style', choices=['electronic', 'folk', 'classical', 'pop', 'ambient'], 
+                       help='背景音乐风格')
+    parser.add_argument('--output', help='输出文件名')
+    parser.add_argument('--no-music', action='store_true', help='禁用背景音乐')
+    parser.add_argument('--no-progress', action='store_true', help='禁用进度条')
     
     args = parser.parse_args()
     
@@ -698,23 +738,62 @@ def main():
         print(f"音乐数据已生成，长度: {len(audio_data)}")
     elif args.podcast:
         try:
-            from minimax_podcast import PodcastGenerator
+            from podcast_system.podcast_generator import PodcastGenerator
             generator = PodcastGenerator(client)
             
-            result = generator.generate_podcast(
-                topic=args.podcast,
-                scene=args.scene,
-                custom_voices=args.voice,
-                duration=10
-            )
+            # 验证参数
+            if not generator.validate_inputs(args.podcast, args.scene, args.duration, args.voice):
+                sys.exit(1)
             
-            if result:
-                print(f"播客生成完成: {result}")
+            # 构建参数
+            kwargs = {
+                "topic": args.podcast,
+                "scene": args.scene,
+                "duration": args.duration,
+                "show_progress": not args.no_progress
+            }
+            
+            if args.voice:
+                kwargs["voices"] = args.voice
+            if args.role_names:
+                kwargs["role_names"] = args.role_names
+            if args.music_style:
+                kwargs["music_style"] = args.music_style
+            if args.output:
+                kwargs["output_filename"] = args.output
+            
+            # 生成播客
+            result = generator.generate_podcast(**kwargs)
+            
+            if result and os.path.exists(result):
+                file_size = os.path.getsize(result)
+                print(f"✅ 播客生成完成: {result}")
+                print(f"📊 文件大小: {file_size:,} bytes")
+                
+                # 自动播放选项
+                if interactive_mode and console:
+                    from rich.prompt import Confirm
+                    if Confirm.ask("是否播放播客？"):
+                        try:
+                            import subprocess
+                            import platform
+                            
+                            if platform.system() == "Windows":
+                                os.startfile(result)
+                            elif platform.system() == "Darwin":
+                                subprocess.call(["open", result])
+                            else:
+                                subprocess.call(["xdg-open", result])
+                                
+                        except Exception as e:
+                            print(f"无法自动播放: {e}")
             else:
-                print("播客生成失败")
+                print("❌ 播客生成失败")
                 
         except ImportError as e:
             print(f"播客模块未找到: {e}")
+        except Exception as e:
+            print(f"❌ 播客生成出错: {e}")
     elif args.interactive or interactive_mode:
         if not interactive_mode:
             print("请先安装依赖: pip install inquirer rich")
@@ -736,7 +815,7 @@ def main():
             elif "语音克隆" in choice:
                 print("语音克隆功能开发中...")
             elif "电台播客" in choice:
-                podcast_ui = PodcastUI(self.client)
+                podcast_ui = PodcastUI(client)
                 podcast_ui.show_podcast_menu()
             elif "退出" in choice:
                 console.print("[yellow]感谢使用！[/yellow]")

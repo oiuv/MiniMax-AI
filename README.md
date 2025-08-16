@@ -215,4 +215,73 @@ A: 直接拉取最新代码，依赖通常向后兼容
 
 ---
 
+## 🗣️ 重要音色列表更新 (2025年8月)
+
+### 经典音色 (语音合成专用)
+| voice_id | voice_name | 音色特点 |
+|----------|------------|----------|
+| **female-chengshu** | 成熟女声 | 温暖亲切，适合播客 |
+| **male-qn-jingying** | 精英男声 | 专业稳重，适合新闻 |
+| **female-yujie** | 知性女声 | 温柔优雅，适合对话 |
+| **male-qn-daxuesheng** | 大学生男声 | 青春活力，适合教育 |
+
+### 特色音色 (保留经典)
+| voice_id | voice_name | 音色特点 |
+|----------|------------|----------|
+| **MyVoice01_hd** | 雪风 | 清冷女声 |
+| **Huizi000** | 惠子 | 温柔女声 |
+| **YYAYAO00** | 抖音阿瑶 | 活泼女声 |
+| **YYSLS000** | 少东家 | 磁性男声 |
+| **TV-f01_hd** | 白素贞 | 古典女声 |
+| **TV-m01_hd** | 许仙 | 书生男声 |
+| **TV-m10_hd** | 蜡笔小新 | 卡通童声 |
+
+### 完整音色分类
+<details>
+<summary>点击查看全部音色</summary>
+
+#### 🎙️ 女声系列
+- **female-chengshu** - 成熟女声
+- **female-yujie** - 知性女声  
+- **female-qn-beijin** - 北京女声
+- **female-qn-sichuan** - 四川女声
+- **female-qn-dongbei** - 东北女声
+- **Huizi000** - 惠子
+- **YYAYAO00** - 抖音阿瑶
+- **YYSLS-f03_hd** - 周红线
+- **YYSLS-f04_hd** - 寒香寻
+- **TV-f01_hd** - 白素贞
+- **TV-f02_hd** - 小青
+
+#### 🎙️ 男声系列  
+- **male-qn-jingying** - 精英男声
+- **male-qn-daxuesheng** - 大学生男声
+- **male-qn-beijin** - 北京男声
+- **male-qn-sichuan** - 四川男声
+- **YYSLS000** - 少东家
+- **YYSLS-m01_hd** - 伊刀
+- **TV-m01_hd** - 许仙
+- **TV-m10_hd** - 蜡笔小新
+
+#### 🎙️ 特色系列
+- **presenter_male** - 新闻男主播
+- **audiobook_female_1** - 有声书女声
+- **MyVoice01_hd** - 雪风
+
+</details>
+
+### 使用示例
+```bash
+# 使用经典音色
+python minimax_cli.py --podcast "今日新闻" --voice presenter_male
+
+# 双人对话
+python minimax_cli.py --podcast "科技讨论" --scene dialogue --voice male-qn-jingying --voice female-chengshu
+
+# 使用特色音色
+python minimax_cli.py --podcast "故事讲述" --voice TV-f01_hd
+```
+
+---
+
 **享受AI创作的乐趣吧！** 🎉
