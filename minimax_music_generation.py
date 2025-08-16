@@ -1,5 +1,5 @@
-import subprocess
 import requests
+import json
 import os
 from datetime import datetime
 
@@ -11,58 +11,80 @@ def get_env_variable(var_name: str) -> str:
 group_id = get_env_variable('MINIMAX_GROUP_ID')
 api_key = get_env_variable('MINIMAX_API_KEY')
 
-url = "https://api.minimax.chat/v1/music_generation"
+# 修正的端点URL
+url = f"https://api.minimaxi.com/v1/music_generation?GroupId={group_id}"
 
-refer_voice = 'vocal-2025020811390925-MgTTWloT'
-refer_instrumental = 'instrumental-2025020811390925-fRmJBzrU'
-refer_vocal = 'YYSLS000'
-
-payload = {
-            'refer_voice': refer_voice,
-            'refer_instrumental': refer_instrumental,
-            'refer_vocal': refer_vocal,
-            'lyrics': '##煨烟火开题序篇花缀眉眼边\n误认谁家女儿作神仙\n提灯罗袖堪堪遮了半面\n谎说翩翩赴人间一宴\n转个糖画尝鲜 巷口戏法开眼\n看官你捧场赏个钱\n兜来清辉泼染衣衫两件\n长街灯如昼叫做上元\n##',
-            'model': 'music-01',
-            'audio_setting': '{"sample_rate":44100,"bitrate":256000,"format":"mp3"}'
+# 测试音乐生成
+def generate_music_example():
+    """音乐生成示例"""
+    
+    payload = {
+        "model": "music-1.5",
+        "prompt": "独立民谣,忧郁,内省,夜晚,咖啡馆,治愈",
+        "lyrics": """[Intro]
+轻柔的吉他前奏
+[Verse 1]
+夜色温柔心事轻放
+街灯下的影子拉长
+独自坐在咖啡馆
+品味着孤独的香
+[Chorus]
+让音乐带走忧伤
+治愈每个孤单的夜晚
+[Verse 2]
+回忆如潮水般涌来
+你的笑容在记忆里
+像月光一样明亮
+温暖着我的心房
+[Outro]
+音乐渐渐结束
+留下美好的回忆""",
+        "audio_setting": {
+            "sample_rate": 44100,
+            "bitrate": 256000,
+            "format": "mp3"
         }
+    }
 
-headers = {
-    'authorization': 'Bearer ' + api_key,
-}
+    headers = {
+        'authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        print("响应结果:", json.dumps(result, indent=2, ensure_ascii=False))
+        
+        if 'data' in result and 'audio' in result['data']:
+            audio_hex = result['data']['audio']
+            
+            # 保存音频文件
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"generated_music_{current_time}.mp3"
+            
+            # 将十六进制转换为字节
+            audio_bytes = bytes.fromhex(audio_hex)
+            
+            with open(filename, 'wb') as f:
+                f.write(audio_bytes)
+            
+            print(f"✅ 音乐生成完成: {filename}")
+            print(f"📊 文件大小: {len(audio_bytes):,} bytes")
+            return filename
+        else:
+            print("❌ 响应格式错误:", result)
+            return None
+            
+    except Exception as e:
+        print(f"❌ 音乐生成失败: {e}")
+        return None
 
 
-def audio_play(data: str) -> bytes:
-    mpv_command = ["mpv", "--no-cache", "--no-terminal", "--", "fd://0"]
-    mpv_process = subprocess.Popen(
-        mpv_command,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    # convert hex into bytes
-    decoded_hex = bytes.fromhex(data)
-    mpv_process.stdin.write(decoded_hex)  # type: ignore
-    mpv_process.stdin.flush()  # type: ignore
-
-    if mpv_process.stdin:
-        mpv_process.stdin.close()
-    mpv_process.wait()
-
-    return decoded_hex
-
-
-response = requests.post(url, headers=headers, data=payload)
-print(response.text)
-audio_hex = response.json()['data']['audio']
-audio = audio_play(audio_hex)
-
-# 获取当前时间戳
-current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-# 构造文件名，包含 voice_id 和时间戳
-file_name = f'{refer_voice}_{current_time}.MP3'
-# 将结果保存到以 voice_id 命名的文件中
-with open(file_name, 'wb') as file:
-    file.write(audio)
-
-print(f"音频已保存为: {file_name}")
+if __name__ == "__main__":
+    if not group_id or not api_key:
+        print("❌ 请先设置环境变量 MINIMAX_GROUP_ID 和 MINIMAX_API_KEY")
+    else:
+        generate_music_example()

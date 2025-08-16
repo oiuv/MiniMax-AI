@@ -302,33 +302,74 @@ class MiniMaxClient:
             raise ValueError(f"API响应格式错误: {response}")
 
     def generate_music(self, prompt: str, lyrics: str = None, refer_voice: str = None, 
-                      refer_instrumental: str = None, refer_vocal: str = None) -> str:
+                      refer_instrumental: str = None, refer_vocal: str = None, 
+                      audio_type: str = "instrumental") -> str:
         """音乐生成 - 支持最新音乐模型
         
         支持模型:
-        - music-1.5: 支持音乐描述和歌词生成
-        - music-01: 支持上传音乐文件，通过干声和伴奏生成
+        - music-1.5: 支持音乐描述和歌词生成，支持完整歌词和音乐风格描述
+        
+        参数:
+        - prompt: 音乐描述，如"游戏背景音乐，史诗，紧张，战斗场景"
+        - lyrics: 歌词内容，可选，留空将使用占位符
+        - audio_type: "instrumental"纯音乐或"vocal"带歌词
         """
-        # 确保歌词参数存在，使用默认歌词
-        default_lyrics = """[Intro]
-轻柔的背景音乐开始
-[Verse]
-这是一个美好的时刻
-让我们享受这段时光
-[Chorus]
-音乐带来温暖和力量
-[Bridge]
-感受每一个音符的跳动
-[Outro]
-音乐渐渐结束"""
+        # 为纯音乐提供占位符歌词
+        if audio_type == "instrumental" or not lyrics:
+            instrumental_lyrics = {
+                "game_bg": """[Instrumental]
+史诗游戏背景音乐
+紧张刺激的战斗氛围
+营造沉浸式游戏体验""",
+                "podcast_intro": """[Instrumental]
+播客开场音乐
+轻松愉快的氛围
+现代简约风格""",
+                "ambient": """[Instrumental]
+环境背景音乐
+舒缓放松的氛围
+适合冥想或工作""",
+                "cinematic": """[Instrumental]
+电影配乐风格
+宏大叙事的氛围
+情感丰富的旋律""",
+                "corporate": """[Instrumental]
+企业宣传音乐
+专业现代的风格
+积极向上的氛围""",
+                "default": """[Instrumental]
+纯音乐
+无歌词
+器乐演奏"""
+            }
+            
+            # 根据prompt内容选择合适的占位符
+            prompt_lower = prompt.lower()
+            if any(word in prompt_lower for word in ['游戏', 'game', '战斗', 'battle']):
+                lyrics = instrumental_lyrics["game_bg"]
+            elif any(word in prompt_lower for word in ['播客', 'podcast', '开场', 'intro']):
+                lyrics = instrumental_lyrics["podcast_intro"]
+            elif any(word in prompt_lower for word in ['环境', 'ambient', '背景', 'background']):
+                lyrics = instrumental_lyrics["ambient"]
+            elif any(word in prompt_lower for word in ['电影', 'cinematic', '史诗', 'epic']):
+                lyrics = instrumental_lyrics["cinematic"]
+            elif any(word in prompt_lower for word in ['企业', 'corporate', '宣传', 'promo']):
+                lyrics = instrumental_lyrics["corporate"]
+            else:
+                lyrics = instrumental_lyrics["default"]
         
         data = {
             "model": "music-1.5",
             "prompt": prompt,
-            "lyrics": lyrics or default_lyrics
+            "lyrics": lyrics,
+            "audio_setting": {
+                "sample_rate": 44100,
+                "bitrate": 256000,
+                "format": "mp3"
+            }
         }
         
-        response = self._make_request("POST", "music_generation", json=data)
+        response = self._make_request("POST", f"music_generation?GroupId={self.group_id}", json=data)
         
         # 处理不同响应格式
         if 'data' in response and 'audio' in response['data']:
@@ -730,12 +771,59 @@ def main():
         task_id = client.generate_video(args.video)
         print(f"任务ID: {task_id}")
     elif args.music:
-        # 使用用户输入作为prompt，可选提供歌词
-        audio_data = client.generate_music(
-            prompt=args.music,
-            lyrics="欢迎收听友彩伴您节目\n让我们一起分享精彩时光"
-        )
-        print(f"音乐数据已生成，长度: {len(audio_data)}")
+        # 支持纯音乐生成
+        try:
+            prompt = args.music
+            
+            # 检测是否为纯音乐请求
+            instrumental_keywords = ['纯音乐', '背景音乐', 'bgm', 'instrumental', '无歌词', '配乐']
+            is_instrumental = any(keyword in prompt.lower() for keyword in instrumental_keywords)
+            
+            if is_instrumental:
+                # 纯音乐占位符 - 使用更专业的无歌词描述
+                instrumental_lyrics = """[Instrumental]
+纯器乐演奏
+无歌词无人声
+纯音乐背景音乐
+管弦乐/电子合成器
+营造氛围音乐"""
+                audio_hex = client.generate_music(
+                    prompt=prompt,
+                    lyrics=instrumental_lyrics
+                )
+            else:
+                # 带歌词的音乐
+                audio_hex = client.generate_music(
+                    prompt=prompt,
+                    lyrics="""[Intro]
+轻柔的旋律开始
+[Verse]
+这是属于你的音乐时光
+每一个音符都充满温暖
+[Outro]
+音乐渐渐结束"""
+                )
+            
+            # 保存音频文件
+            from datetime import datetime
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if is_instrumental:
+                filename = f"instrumental_{timestamp}.mp3"
+            else:
+                filename = f"music_{timestamp}.mp3"
+            
+            audio_bytes = bytes.fromhex(audio_hex)
+            
+            with open(filename, 'wb') as f:
+                f.write(audio_bytes)
+            
+            print(f"[SUCCESS] 音乐生成完成: {filename}")
+            print(f"[INFO] 文件大小: {len(audio_bytes):,} bytes")
+            print(f"[INFO] 类型: {'纯音乐' if is_instrumental else '带歌词音乐'}")
+            
+        except Exception as e:
+            print(f"[ERROR] 音乐生成失败: {e}")
     elif args.podcast:
         try:
             from podcast_system.podcast_generator import PodcastGenerator
@@ -794,7 +882,7 @@ def main():
             print(f"播客模块未找到: {e}")
         except Exception as e:
             print(f"❌ 播客生成出错: {e}")
-    elif args.interactive or interactive_mode:
+    elif args.interactive:
         if not interactive_mode:
             print("请先安装依赖: pip install inquirer rich")
             sys.exit(1)
