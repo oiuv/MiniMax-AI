@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 MiniMax AI 统一命令行工具
-提供用户友好的交互界面，整合所有AI功能
+简洁高效，无垃圾代码版本
 """
 
 import os
@@ -11,352 +11,210 @@ import json
 import time
 import requests
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any
 import argparse
-from pathlib import Path
-
-# 尝试导入可选依赖
-interactive_mode = True
-try:
-    import inquirer
-    from rich.console import Console
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.prompt import Prompt, Confirm
-    console = Console()
-except ImportError:
-    interactive_mode = False
-    console = None
 
 class MiniMaxClient:
+    """精简版MiniMax客户端"""
+    
     def __init__(self):
         self.group_id = os.getenv('MINIMAX_GROUP_ID')
         self.api_key = os.getenv('MINIMAX_API_KEY')
         self.base_url = "https://api.minimaxi.com/v1"
+        self.verbose = False
         
         if not self.group_id or not self.api_key:
             self._setup_credentials()
     
-    def _setup_credentials(self):
-        """首次使用时的配置向导"""
-        if interactive_mode:
-            console.print(Panel.fit("[bold cyan]欢迎使用 MiniMax AI 工具[/bold cyan]"))
-            console.print("首次使用需要配置API密钥信息")
-            
-            group_id = Prompt.ask("请输入您的 MiniMax Group ID")
-            api_key = Prompt.ask("请输入您的 MiniMax API Key")
-            
-            # 保存到环境变量文件
-            env_file = Path.home() / '.minimax_env'
-            with open(env_file, 'w') as f:
-                f.write(f"MINIMAX_GROUP_ID={group_id}\n")
-                f.write(f"MINIMAX_API_KEY={api_key}\n")
-            
-            console.print(f"[green]配置已保存到 {env_file}[/green]")
-            console.print("请重新运行程序，或使用: source ~/.minimax_env")
-            sys.exit(0)
-        else:
-            print("请设置环境变量 MINIMAX_GROUP_ID 和 MINIMAX_API_KEY")
-            sys.exit(1)
+    def _log(self, message: str, level: str = "INFO"):
+        """日志输出"""
+        print(f"[{level}] {message}")
     
-    def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """统一请求封装"""
-        url = f"{self.base_url}/{endpoint}"
-        headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
-        }
+    def _log_request(self, method: str, endpoint: str, data: dict = None):
+        """请求日志"""
+        self._log(f"🚀 {method} {endpoint}")
+        if self.verbose and data:
+            self._log(f"📤 请求数据: {json.dumps(data, ensure_ascii=False, indent=2)}")
+    
+    def _setup_credentials(self):
+        """配置向导"""
+        config_file = Path.home() / '.minimax_ai' / 'config.json'
+        config_file.parent.mkdir(exist_ok=True)
         
-        # 添加GroupId到查询参数（如果需要）
-        if 't2a_v2' in endpoint or 'voice_clone' in endpoint:
+        if config_file.exists():
+            try:
+                with open(config_file) as f:
+                    config = json.load(f)
+                    self.group_id = config.get('group_id')
+                    self.api_key = config.get('api_key')
+                    if self.group_id and self.api_key:
+                        return
+            except Exception:
+                pass
+        
+        print("⚠️  需要配置API密钥")
+        group_id = input("请输入Group ID: ").strip()
+        api_key = input("请输入API Key: ").strip()
+        
+        if not group_id or not api_key:
+            print("❌ Group ID和API Key不能为空")
+            sys.exit(1)
+        
+        with open(config_file, 'w') as f:
+            json.dump({'group_id': group_id, 'api_key': api_key}, f, indent=2)
+        
+        print(f"✅ 配置已保存到 {config_file}")
+        print("请重新运行程序")
+        sys.exit(0)
+    
+    def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """统一请求"""
+        url = f"{self.base_url}/{endpoint}"
+        if any(k in endpoint for k in ['t2a_v2', 'voice_clone', 'music_generation']):
             url += f"?GroupId={self.group_id}"
         
-        # 调试信息（仅显示关键信息，不显示敏感数据）
-        if 'json' in kwargs and 'text' in kwargs['json']:
-            text_preview = kwargs['json']['text'][:50] + "..." if len(kwargs['json']['text']) > 50 else kwargs['json']['text']
-            print(f"DEBUG: 请求URL: {url}")
-            print(f"DEBUG: 文本预览: {text_preview}")
-        else:
-            print(f"DEBUG: 请求URL: {url}")
-        
-        try:
-            import time
-            max_retries = 3
-            base_delay = 2
-            
-            for attempt in range(max_retries):
-                try:
-                    response = requests.request(method, url, headers=headers, **kwargs)
-                    response.raise_for_status()
-                    result = response.json()
-                    
-                    # 检查API错误
-                    if 'base_resp' in result and result['base_resp']['status_code'] != 0:
-                        error_msg = result['base_resp'].get('status_msg', '未知错误')
-                        error_code = result['base_resp'].get('status_code', -1)
-                        
-                        # 频率限制，智能重试
-                        if error_code == 1002:  # 频率限制
-                            if attempt < max_retries - 1:
-                                delay = base_delay * (2 ** attempt)
-                                print(f"⚠️  请求频率限制，等待{delay}秒后重试...")
-                                time.sleep(delay)
-                                continue
-                            else:
-                                raise Exception("API频率限制，请稍后再试")
-                        else:
-                            raise Exception(f"API错误: {error_msg}")
-                    
-                    return result
-                    
-                except requests.exceptions.RequestException as e:
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"⚠️  网络请求失败，{delay}秒后重试...")
-                        time.sleep(delay)
-                        continue
-                    else:
-                        raise
-                        
-        except Exception as e:
-            if interactive_mode:
-                console.print(f"[red]错误: {e}[/red]")
-            else:
-                print(f"错误: {e}")
-            sys.exit(1)
-    
-    def chat_completion(self, message: str, model: str = "MiniMax-Text-01", stream: bool = False) -> str:
-        """智能对话 - 基于最新官方API文档
-        
-        支持的最新模型:
-        - MiniMax-Text-01: 最新文本生成模型，最大token数 1,000,192
-        - MiniMax-M1: 高性能文本模型，最大token数 1,000,192
-        
-        注意：原abab系列模型已升级为MiniMax-Text-01和MiniMax-M1
-        """
-        import requests
-        
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "你是一个有用、诚实且友好的AI助手。"},
-                {"role": "user", "content": message}
-            ],
-            "stream": False,
-            "max_tokens": 1024,
-            "temperature": 0.8,
-            "top_p": 0.95
-        }
-        
-        url = f"{self.base_url}/text/chatcompletion_v2"
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
         
-        try:
-            response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()
-            result = response.json()
-            
-            # 根据官方API格式解析响应
-            if 'choices' in result and len(result['choices']) > 0:
-                choice = result['choices'][0]
-                if 'message' in choice and 'content' in choice['message']:
-                    return choice['message']['content']
-                else:
-                    return "抱歉，未能获取有效回复"
-            else:
-                return f"API响应异常: {result}"
+        self._log_request(method, endpoint, kwargs.get('json'))
+        
+        for attempt in range(3):
+            try:
+                response = requests.request(method, url, headers=headers, **kwargs)
+                response.raise_for_status()
+                result = response.json()
                 
-        except requests.exceptions.RequestException as e:
-            return f"网络请求失败: {e}"
-        except Exception as e:
-            return f"处理响应时出错: {e}"
+                self._log(f"📥 响应状态: {response.status_code}")
+                
+                if 'base_resp' in result and result['base_resp']['status_code'] != 0:
+                    self._log(f"⚠️ API错误: {result['base_resp']['status_msg']}", "ERROR")
+                    if result['base_resp']['status_code'] == 1002 and attempt < 2:
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    raise Exception(f"API错误: {result['base_resp']['status_msg']}")
+                
+                self._log(f"✅ 请求成功")
+                return result
+                
+            except Exception as e:
+                if attempt == 2:
+                    self._log(f"❌ 请求失败: {e}", "ERROR")
+                    sys.exit(1)
+                self._log(f"🔄 重试第{attempt+1}次...", "WARN")
+                time.sleep(1)
     
-    def generate_image(self, prompt: str, aspect_ratio: str = "1:1", n: int = 1, 
-                      model: str = "image-01", width: int = None, height: int = None,
-                      style: dict = None, subject_reference: list = None) -> list:
-        """图像生成 - 支持完整官方API参数
-        
-        支持模型:
-        - image-01: 画面表现细腻，支持文生图、图生图
-        - image-01-live: 手绘、卡通画风增强
-        
-        宽高比支持: 1:1, 16:9, 4:3, 3:2, 2:3, 3:4, 9:16, 21:9
-        分辨率: width/height 512-2048像素，需为8的倍数
-        """
+    def chat(self, message: str, model: str = "MiniMax-Text-01") -> str:
+        """智能对话"""
+        self._log("🤖 开始生成对话内容...")
+        data = {
+            "model": model,
+            "messages": [{"role": "user", "content": message}],
+            "max_tokens": 1024
+        }
+        response = self._request("POST", "text/chatcompletion_v2", json=data)
+        content = response['choices'][0]['message']['content']
+        self._log(f"📄 生成内容长度: {len(content)} 字符")
+        return content
+    
+    def image(self, prompt: str, model: str = "image-01", n: int = 1, aspect_ratio: str = "1:1", seed: int = None) -> list:
+        """图像生成"""
+        self._log(f"🎨 开始生成图像...")
         data = {
             "model": model,
             "prompt": prompt,
             "response_format": "url",
-            "n": min(n, 9),  # 最大9张
+            "n": n,
+            "aspect_ratio": aspect_ratio,
             "prompt_optimizer": True
         }
-        
-        # 添加宽高比或自定义分辨率
-        if width and height:
-            data["width"] = (width // 8) * 8  # 确保是8的倍数
-            data["height"] = (height // 8) * 8
-        else:
-            data["aspect_ratio"] = aspect_ratio
-        
-        # 添加风格控制（仅image-01-live支持）
-        if model == "image-01-live" and style:
-            data["style"] = style
-            
-        # 添加主体参考（仅image-01支持）
-        if model == "image-01" and subject_reference:
-            data["subject_reference"] = subject_reference
-            
-        response = self._make_request("POST", "image_generation", json=data)
-        
-        # 正确处理响应格式
-        if 'data' in response and 'image_urls' in response['data']:
-            return response['data']['image_urls']
-        elif 'data' in response and isinstance(response['data'], list):
-            return [img['url'] for img in response['data']]
-        elif 'task_id' in response:
-            return [f"任务已提交: {response['task_id']}"]
-        else:
-            return [str(response)]
+        if seed is not None:
+            data["seed"] = seed
+        response = self._request("POST", "image_generation", json=data)
+        urls = response.get('data', {}).get('image_urls', [])
+        self._log(f"📸 生成图片数量: {len(urls)} 张")
+        return urls
     
-    def generate_video(self, prompt: str, model: str = "MiniMax-Hailuo-02") -> str:
-        """视频生成 - 支持最新视频模型
-        
-        支持模型:
-        - MiniMax-Hailuo-02: 新一代1080P超清视频，10秒生成
-        - T2V-01-Director: 文生视频导演版，支持运镜指令
-        - I2V-01-Director: 图生视频导演版，支持参考图片
-        - I2V-01-live: 图生视频，卡通漫画风格增强
-        - S2V-01: 主体参考视频，保持人物稳定性
-        """
-        data = {"prompt": prompt, "model": model}
-        
-        response = self._make_request("POST", "video_generation", json=data)
-        return response['task_id']
+    def video(self, prompt: str, model: str = "MiniMax-Hailuo-02") -> str:
+        """视频生成"""
+        self._log(f"🎬 开始生成视频...")
+        data = {
+            "prompt": prompt,
+            "model": model,
+            "duration": 6,
+            "resolution": "1080P"
+        }
+        response = self._request("POST", "video_generation", json=data)
+        task_id = response.get('task_id', '')
+        self._log(f"🎯 视频任务ID: {task_id}")
+        return task_id
     
-    def query_video_status(self, task_id: str) -> Dict[str, Any]:
-        """查询视频生成状态"""
-        return self._make_request("GET", f"query/video_generation?task_id={task_id}")
+    def video_status(self, task_id: str) -> Dict[str, Any]:
+        """查询视频状态"""
+        return self._request("GET", f"query/video_generation?task_id={task_id}")
     
-    def download_file(self, file_id: str, filename: str = None, file_type: str = "video") -> str:
-        """下载文件（视频/音频/图像）"""
+    def download_video(self, file_id: str, filename: str = None) -> str:
+        """下载视频文件"""
+        self._log(f"📥 开始下载视频...")
         if not filename:
-            ext = {
-                "video": "mp4",
-                "audio": "mp3", 
-                "image": "jpg"
-            }.get(file_type, "bin")
-            filename = f"{file_type}_{file_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
+            filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
         
-        response = self._make_request("GET", f"files/retrieve?file_id={file_id}")
-        download_url = response['file']['download_url']
+        # 获取下载URL
+        download_response = self._request("GET", f"files/retrieve?file_id={file_id}")
+        
+        download_url = download_response['file']['download_url']
         
         # 下载文件
-        import requests
-        file_data = requests.get(download_url).content
-        
-        # 保存到文件
-        filepath = os.path.join(os.getcwd(), filename)
-        with open(filepath, 'wb') as f:
-            f.write(file_data)
-        
-        return filepath
+        import urllib.request
+        filepath = Path('./output/videos') / filename
+        filepath.parent.mkdir(exist_ok=True)
+        self._log(f"🎯 正在下载: {filename}")
+        urllib.request.urlretrieve(download_url, filepath)
+        self._log(f"✅ 下载完成: {filepath}")
+        return str(filepath)
     
-    def text_to_speech(self, text: str, voice_id: str = "female-chengshu", 
-                      model: str = "speech-02-hd") -> str:
-        """文本转语音 - 基于官方TTS v2 API文档"""
-        if not text or not text.strip():
-            raise ValueError("文本内容不能为空")
+    def music(self, prompt: str, lyrics: str) -> str:
+        """音乐生成"""
+        self._log("🎵 开始生成音乐...")
+        import sys
         
-        # 正确的TTS v2参数结构
-        data = {
-            "model": model,
-            "text": text.strip(),
-            "voice_setting": {
-                "voice_id": voice_id,
-                "speed": 1.0,
-                "vol": 3.0,
-                "pitch": 0
-            }
-        }
+        # 严格校验长度
+        prompt = prompt.strip()
+        lyrics = lyrics.strip()
+        
+        if len(prompt) < 10:
+            print(f"❌ prompt过短 ({len(prompt)}字符)")
+            print(f"💡 建议: 添加更多描述，如风格、情绪、场景")
+            print(f"📝 示例: '古风武侠音乐，适合江湖场景，悠扬笛子伴奏'")
+            sys.exit(1)
+        
+        if len(prompt) > 300:
+            print(f"❌ prompt过长 ({len(prompt)}字符)")
+            print(f"💡 建议: prompt内容请控制在300字符以内")
+            print(f"📊 当前长度: {len(prompt)}字符，超出限制: {len(prompt) - 300}字符")
+            print(f"📝 提示: 可以精简描述或使用更精确的关键词")
+            sys.exit(1)
+        
+        if not lyrics or not lyrics.strip():
+            print(f"❌ 歌词为必填参数")
+            print(f"💡 建议: 提供歌词内容或文件路径")
+            print(f"📝 示例: '[Verse]\n江湖路远\n[Chorus]\n仗剑天涯'")
+            sys.exit(1)
             
-        response = self._make_request("POST", "t2a_v2", json=data)
+        if len(lyrics) < 10:
+            print(f"❌ 歌词过短 ({len(lyrics)}字符)")
+            print(f"💡 建议: 歌词内容请控制在10-600字符")
+            print(f"📝 示例: '[Verse]\n江湖路远\n[Chorus]\n仗剑天涯'")
+            sys.exit(1)
         
-        # 检查响应格式
-        if 'data' in response and 'audio' in response['data']:
-            return response['data']['audio']
-        elif 'audio' in response:
-            return response['audio']
-        else:
-            raise ValueError(f"API响应格式错误: {response}")
-        
-        # 检查响应格式
-        if 'data' in response and 'audio' in response['data']:
-            return response['data']['audio']
-        elif 'audio' in response:
-            return response['audio']
-        else:
-            raise ValueError(f"API响应格式错误: {response}")
-
-    def generate_music(self, prompt: str, lyrics: str = None, refer_voice: str = None, 
-                      refer_instrumental: str = None, refer_vocal: str = None, 
-                      audio_type: str = "instrumental") -> str:
-        """音乐生成 - 支持最新音乐模型
-        
-        支持模型:
-        - music-1.5: 支持音乐描述和歌词生成，支持完整歌词和音乐风格描述
-        
-        参数:
-        - prompt: 音乐描述，如"游戏背景音乐，史诗，紧张，战斗场景"
-        - lyrics: 歌词内容，可选，留空将使用占位符
-        - audio_type: "instrumental"纯音乐或"vocal"带歌词
-        """
-        # 为纯音乐提供占位符歌词
-        if audio_type == "instrumental" or not lyrics:
-            instrumental_lyrics = {
-                "game_bg": """[Instrumental]
-史诗游戏背景音乐
-紧张刺激的战斗氛围
-营造沉浸式游戏体验""",
-                "podcast_intro": """[Instrumental]
-播客开场音乐
-轻松愉快的氛围
-现代简约风格""",
-                "ambient": """[Instrumental]
-环境背景音乐
-舒缓放松的氛围
-适合冥想或工作""",
-                "cinematic": """[Instrumental]
-电影配乐风格
-宏大叙事的氛围
-情感丰富的旋律""",
-                "corporate": """[Instrumental]
-企业宣传音乐
-专业现代的风格
-积极向上的氛围""",
-                "default": """[Instrumental]
-纯音乐
-无歌词
-器乐演奏"""
-            }
-            
-            # 根据prompt内容选择合适的占位符
-            prompt_lower = prompt.lower()
-            if any(word in prompt_lower for word in ['游戏', 'game', '战斗', 'battle']):
-                lyrics = instrumental_lyrics["game_bg"]
-            elif any(word in prompt_lower for word in ['播客', 'podcast', '开场', 'intro']):
-                lyrics = instrumental_lyrics["podcast_intro"]
-            elif any(word in prompt_lower for word in ['环境', 'ambient', '背景', 'background']):
-                lyrics = instrumental_lyrics["ambient"]
-            elif any(word in prompt_lower for word in ['电影', 'cinematic', '史诗', 'epic']):
-                lyrics = instrumental_lyrics["cinematic"]
-            elif any(word in prompt_lower for word in ['企业', 'corporate', '宣传', 'promo']):
-                lyrics = instrumental_lyrics["corporate"]
-            else:
-                lyrics = instrumental_lyrics["default"]
+        if len(lyrics) > 600:
+            print(f"❌ 歌词过长 ({len(lyrics)}字符)")
+            print(f"💡 建议: 歌词内容请控制在600字符以内")
+            print(f"📊 当前长度: {len(lyrics)}字符，超出限制: {len(lyrics) - 600}字符")
+            print(f"📝 提示: 可以精简歌词或分段生成")
+            sys.exit(1)
         
         data = {
             "model": "music-1.5",
@@ -368,546 +226,481 @@ class MiniMaxClient:
                 "format": "mp3"
             }
         }
-        
-        response = self._make_request("POST", f"music_generation?GroupId={self.group_id}", json=data)
-        
-        # 处理不同响应格式
-        if 'data' in response and 'audio' in response['data']:
-            return response['data']['audio']
-        elif 'audio' in response:
-            return response['audio']
-        else:
-            raise ValueError(f"音乐API响应格式错误: {response}")
+        response = self._request("POST", "music_generation", json=data)
+        audio_url = response.get('data', {}).get('audio', '')
+        self._log(f"🎶 音乐生成完成")
+        return audio_url
     
-    def clone_voice(self, file_id: str, voice_id: str, text: str, 
-                   model: str = "speech-02-hd") -> Dict[str, Any]:
-        """语音克隆 - 支持最新语音模型
-        
-        支持模型:
-        - speech-02-hd: 持续更新的HD模型，出色韵律和复刻相似度
-        - speech-02-turbo: 持续更新的Turbo模型，小语种能力加强
-        - speech-01-hd: 稳定版本HD模型，超高复刻相似度
-        - speech-01-turbo: 稳定版本Turbo模型，生成速度快
-        """
+    def tts(self, text: str, voice_id: str = "female-chengshu", emotion: str = "calm") -> str:
+        """文本转语音，支持情感控制"""
+        self._log("🎤 开始语音合成...")
         data = {
-            "file_id": int(file_id),
-            "voice_id": voice_id,
+            "model": "speech-2.5-hd-preview",
             "text": text,
-            "model": model
-        }
-        
-        return self._make_request("POST", f"voice_clone?GroupId={self.group_id}", json=data)
-
-class PodcastUI:
-    def __init__(self, client: MiniMaxClient):
-        self.client = client
-        try:
-            from podcast_system.podcast_generator import PodcastGenerator
-            self.generator = PodcastGenerator(client)
-        except ImportError as e:
-            console.print(f"[red]播客模块未找到: {e}[/red]")
-            self.generator = None
-    
-    def show_podcast_menu(self):
-        """显示播客菜单"""
-        if not self.generator:
-            console.print("[red]播客功能暂不可用[/red]")
-            return
-            
-        console.print(Panel.fit("[bold purple]🎙️ 电台播客生成器[/bold purple]"))
-        
-        # 场景选择
-        scenes = {
-            "solo": "单人主播 - 温暖亲切的独白",
-            "dialogue": "双人对话 - 轻松自然的讨论", 
-            "panel": "多人圆桌 - 专业深入的论坛",
-            "news": "新闻播报 - 正式权威的时事",
-            "storytelling": "故事讲述 - 情感丰富的叙事"
-        }
-        
-        scene_choices = [f"{key}: {desc}" for key, desc in scenes.items()]
-        questions = [
-            inquirer.List('scene',
-                         message="选择播客场景",
-                         choices=scene_choices)
-        ]
-        
-        scene_choice = inquirer.prompt(questions)['scene']
-        scene = scene_choice.split(':')[0]
-        
-        # 主题输入
-        topic = Prompt.ask("播客主题")
-        
-        # 时长选择
-        duration = int(Prompt.ask("时长(分钟)", default="10"))
-        
-        # 音色选择
-        use_custom_voices = Confirm.ask("自定义音色？(否则使用推荐音色)")
-        custom_voices = None
-        
-        if use_custom_voices:
-            speaker_count = 1 if scene == "solo" else (2 if scene == "dialogue" else 3)
-            custom_voices = []
-            
-            # 显示音色分类
-            categories = list(self.generator.VOICE_CATEGORIES.keys())
-            
-            for i in range(speaker_count):
-                console.print(f"\n[bold]为说话人{i+1}选择音色:[/bold]")
-                
-                # 选择分类
-                category_choice = inquirer.list_input(
-                    "音色分类",
-                    choices=categories
-                )
-                
-                # 选择具体音色
-                voices = self.generator.VOICE_CATEGORIES[category_choice]
-                voice_choices = [f"{desc} ({voice_id})" for voice_id, desc in voices.items()]
-                
-                voice_choice = inquirer.list_input(
-                    f"说话人{i+1}音色",
-                    choices=voice_choices
-                )
-                
-                voice_id = voice_choice.split('(')[-1].rstrip(')')
-                custom_voices.append(voice_id)
-                console.print(f"[green]已选择: {voice_choice}[/green]")
-        
-        # 模型选择
-        models = [
-            "speech-2.5-hd-preview (极致相似度，2025-08-06发布)",
-            "speech-2.5-turbo-preview (支持40个语种)",
-            "speech-02-hd (出色韵律)",
-            "speech-01-hd (超高复刻度)"
-        ]
-        
-        model_choice = inquirer.list_input("选择语音模型", choices=models)
-        model = model_choice.split(' ')[0]
-        
-        # 开始生成
-        console.print(f"[yellow]正在生成{scene}播客: {topic}[/yellow]")
-        
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("生成播客中...", total=None)
-            
-            # 构建参数
-            kwargs = {
-                "topic": topic,
-                "scene": scene,
-                "duration": duration,
-                "show_progress": False  # 禁用内部进度条，使用rich进度条
+            "voice_setting": {
+                "voice_id": voice_id,
+                "emotion": emotion,
+                "speed": 1.0,
+                "vol": 1.0,
+                "pitch": 0
+            },
+            "audio_setting": {
+                "sample_rate": 44100,
+                "format": "mp3",
+                "bitrate": 256000
             }
-            
-            if custom_voices:
-                kwargs["voices"] = custom_voices
-            
-            result = self.generator.generate_podcast(**kwargs)
-            
-            progress.update(task, completed=True)
-        
-        if result:
-            console.print(f"[green]✅ 播客生成完成: {result}[/green]")
-            
-            # 提供播放选项
-            if Confirm.ask("是否播放播客？"):
-                try:
-                    import subprocess
-                    import platform
-                    
-                    if platform.system() == "Windows":
-                        os.startfile(result)
-                    elif platform.system() == "Darwin":  # macOS
-                        subprocess.call(["open", result])
-                    else:  # Linux
-                        subprocess.call(["xdg-open", result])
-                        
-                except Exception as e:
-                    console.print(f"[yellow]无法自动播放: {e}[/yellow]")
-                    console.print(f"[dim]文件位置: {result}[/dim]")
-        else:
-            console.print("[red]播客生成失败[/red]")
+        }
+        response = self._request("POST", "t2a_v2", json=data)
+        audio_url = response.get('data', {}).get('audio', '')
+        self._log("🗣️ 语音合成完成")
+        return audio_url
 
-
-class InteractiveUI:
-    def __init__(self, client: MiniMaxClient):
-        self.client = client
-    
-    def show_menu(self):
-        """显示主菜单"""
-        choices = [
-            "💬 智能对话",
-            "🎨 图像生成", 
-            "🎬 视频生成",
-            "🎵 音乐生成",
-            "🎤 语音克隆",
-            "🎙️ 电台播客",
-            "📁 文件管理",
-            "❌ 退出"
-        ]
+    def list_voices(self, voice_type: str = "all") -> Dict[str, Any]:
+        """查询可用音色列表"""
+        self._log("🔍 查询可用音色列表...")
         
-        questions = [
-            inquirer.List('choice',
-                         message="请选择功能",
-                         choices=choices)
-        ]
+        # 检查缓存
+        cache_file = Path("./cache/voices.json")
+        cache_file.parent.mkdir(exist_ok=True)
         
-        return inquirer.prompt(questions)['choice']
-    
-    def chat_interface(self):
-        """对话界面"""
-        console.print(Panel.fit("[bold green]💬 智能对话[/bold green]"))
-        
-        # 模型选择 - 更新为最新模型
-        models = [
-            "MiniMax-Text-01 (最新文本生成模型，最大token数1,000,192)",
-            "MiniMax-M1 (高性能文本模型，最大token数1,000,192)"
-        ]
-        
-        model_choice = inquirer.list_input(
-            "选择模型",
-            choices=models
-        )
-        selected_model = model_choice.split(' ')[0]
-        
-        console.print(f"[dim]已选择模型: {selected_model}[/dim]")
-        console.print("[dim]输入 'exit', 'quit' 或 '退出' 返回主菜单[/dim]\n")
-        
-        # 对话历史
-        messages = [
-            {"role": "system", "content": "你是一个有用、诚实且友好的AI助手。你会提供准确、有用的回答，并在不确定时承认自己的局限性。"}
-        ]
-        
-        while True:
-            message = Prompt.ask("[bold cyan]你[/bold cyan]")
-            if message.lower() in ['exit', 'quit', '退出']:
-                break
-            
-            messages.append({"role": "user", "content": message})
-            
+        # 缓存有效期：2小时
+        cache_valid = False
+        if cache_file.exists():
             try:
-                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-                    task = progress.add_task("AI思考中...", total=None)
-                    response = self.client.chat_completion(message, selected_model)
-                    progress.update(task, completed=True)
-                
-                messages.append({"role": "assistant", "content": response})
-                console.print(Panel(response, title="[bold green]AI助手[/bold green]", border_style="green"))
-                
-            except Exception as e:
-                console.print(f"[red]对话出错: {e}[/red]")
-                console.print("[yellow]请检查网络连接和API密钥配置[/yellow]")
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    if cache_data.get('voice_type') == voice_type:
+                        cache_time = datetime.fromisoformat(cache_data.get('timestamp', ''))
+                        if (datetime.now() - cache_time).total_seconds() < 7200:  # 2小时
+                            self._log("📋 使用缓存数据")
+                            return cache_data.get('data', {})
+            except Exception:
+                pass
+        
+        # API支持的参数映射
+        valid_types = {
+            'system': 'system',
+            'cloning': 'voice_cloning',
+            'generation': 'voice_generation',
+            'music': 'music_generation',
+            'all': 'all'
+        }
+        
+        # 使用有效的API参数
+        api_param = valid_types.get(voice_type, 'all')
+        
+        # 调用API获取最新数据
+        url = "https://api.minimaxi.com/v1/get_voice"
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {'voice_type': api_param}
+        
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()
+            result = response.json()
+            
+            # 缓存结果
+            cache_data = {
+                'voice_type': voice_type,
+                'timestamp': datetime.now().isoformat(),
+                'data': result
+            }
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, ensure_ascii=False, indent=2)
+            
+            self._log("✅ 音色列表已更新并缓存")
+            return result
+            
+        except Exception as e:
+            # 如果API失败，尝试使用缓存（即使过期也显示提示）
+            if cache_file.exists():
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        cache_data = json.load(f)
+                        self._log("⚠️ 使用过期缓存数据，建议稍后刷新", "WARN")
+                        return cache_data.get('data', {})
+                except Exception:
+                    pass
+            
+            self._log(f"❌ 获取音色列表失败: {e}", "ERROR")
+            return {}
     
-    def image_interface(self):
-        """图像生成界面 - 支持完整参数"""
-        console.print(Panel.fit("[bold blue]🎨 图像生成[/bold blue]"))
+    def podcast(self, topic: str, scene: str = "dialogue", voices: list = None, voice: str = None) -> str:
+        """多人对话播客生成"""
+        self._log("🎙️ 开始生成多人对话播客...")
         
-        # 模型选择
-        models = [
-            "image-01 (画面细腻，支持文生图/图生图)",
-            "image-01-live (手绘/卡通画风增强)"
-        ]
-        
-        model_choice = inquirer.list_input("选择图像模型", choices=models)
-        selected_model = model_choice.split(' ')[0]
-        
-        prompt = Prompt.ask("请输入图像描述")
-        
-        # 参数选择
-        use_custom_size = Confirm.ask("使用自定义分辨率？(否则使用宽高比)")
-        
-        if use_custom_size:
-            width = int(Prompt.ask("宽度(512-2048)", default="1024"))
-            height = int(Prompt.ask("高度(512-2048)", default="1024"))
-            aspect_ratio = None
+        # 定义角色和音色
+        if voice:
+            # 使用指定的音色
+            host_voice = voice
+            guest1_voice = voice
+            guest2_voice = voice
         else:
-            aspect_ratios = [
-                "1:1 (正方形)",
-                "16:9 (宽屏)", 
-                "4:3 (标准)",
-                "3:2 (照片)",
-                "2:3 (竖版)",
-                "3:4 (竖屏)",
-                "9:16 (手机竖屏)",
-                "21:9 (超宽屏)"
-            ]
-            ratio_choice = inquirer.list_input("选择宽高比", choices=aspect_ratios)
-            aspect_ratio = ratio_choice.split(' ')[0]
-            width = height = None
+            # 使用默认音色组合
+            host_voice = "female-yujie"
+            guest1_voice = "male-qn-jingying"
+            guest2_voice = "female-chengshu"
         
-        count = int(Prompt.ask("生成数量(1-9)", default="1"))
+        # 生成多人对话内容
+        prompt = f"""请为播客节目生成关于'{topic}'的**多人对话**，格式如下：
+
+        **主持人小雅**：大家好，欢迎收听本期播客...
+
+        **嘉宾小明**：谢谢小雅，我认为...
+
+        **嘉宾小红**：我补充一点...
+
+        **主持人小雅**：感谢两位的分享...
+
+        要求：
+        1. 至少6-8轮完整对话
+        2. 每段发言50-80字
+        3. 包含开场、深入讨论、总结
+        4. 用**角色名**：开头标识说话人
+        5. 总长度1000-1500字
+        """
         
-        # 风格设置（仅image-01-live支持）
-        style = None
-        if selected_model == "image-01-live":
-            styles = [
-                "手绘",
-                "卡通", 
-                "漫画",
-                "水彩",
-                "油画",
-                "素描"
-            ]
-            style_choice = inquirer.list_input("选择画风", choices=styles)
-            style = {"style": style_choice}
+        content = self.chat(prompt)
+        self._log(f"📄 生成对话内容: {len(content)} 字符")
         
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-            task = progress.add_task("生成图像中...", total=None)
-            urls = self.client.generate_image(
-                prompt, 
-                aspect_ratio=aspect_ratio,
-                width=width,
-                height=height,
-                n=count,
-                model=selected_model,
-                style=style
-            )
-            progress.update(task, completed=True)
+        # 打印原始内容用于调试
+        if self.verbose:
+            self._log(f"📝 原始内容: {content[:200]}...")
         
-        console.print(f"[green]生成完成！共 {len(urls)} 张图像[/green]")
-        for i, url in enumerate(urls, 1):
-            console.print(f"图像 {i}: {url}")
-            
-        # 提供下载选项
-        if Confirm.ask("是否下载所有图像？"):
-            for i, url in enumerate(urls, 1):
-                filename = f"image_{i}.jpg"
-                console.print(f"下载图像 {i}...")
-                # 这里可以添加实际下载逻辑
+        # 解析对话段落 - 增强匹配规则
+        paragraphs = [p.strip() for p in content.split('\n') if p.strip() and '：**' in p]
+        self._log(f"🎭 解析对话段落: {len(paragraphs)} 段")
+        
+        if len(paragraphs) == 0:
+            self._log("⚠️  未找到标准格式对话，尝试备用解析...")
+            # 备用解析：寻找包含冒号的行
+            paragraphs = [p.strip() for p in content.split('\n') if p.strip() and (':' in p or '：' in p)]
+            self._log(f"🔄 备用解析结果: {len(paragraphs)} 段")
+        
+        # 为每段分配音色和生成音频
+        voice_mapping = {
+            "主持人小雅": host_voice,
+            "嘉宾小明": guest1_voice,
+            "嘉宾小红": guest2_voice
+        }
+        
+        audio_segments = []
+        valid_paragraphs = 0
+        
+        for para in paragraphs:
+            for role, voice in voice_mapping.items():
+                role_markers = [f"**{role}**", f"{role}:", f"{role}："]
+                for marker in role_markers:
+                    if para.startswith(marker):
+                        text = para.replace(marker, "").strip()
+                        if text and len(text) > 10:
+                            self._log(f"🗣️ {role}({voice}): {text[:50]}...")
+                            
+                            # 为每个角色使用不同音色生成音频
+                            audio = self.tts(text, voice)
+                            audio_segments.append(audio)
+                            valid_paragraphs += 1
+                            break
+        
+        if audio_segments:
+            # 合并所有音频段落
+            self._log(f"🎵 合并{len(audio_segments)}段音频...")
+            # 简单合并：按顺序连接
+            combined_audio = "".join(audio_segments)
+            return combined_audio
+        else:
+            self._log(f"❌ 播客生成失败: 有效段落不足({valid_paragraphs}段)", "ERROR")
+            if not self.verbose:
+                self._log("💡 使用 -V 查看详细内容分析")
+            return ""
+
+class FileManager:
+    """文件管理"""
     
-    def video_interface(self):
-        """视频生成界面"""
-        console.print(Panel.fit("[bold magenta]🎬 视频生成[/bold magenta]"))
+    def __init__(self):
+        self.base_dir = Path('./output')
+        self.base_dir.mkdir(exist_ok=True)
         
-        # 模型选择
-        models = [
-            "MiniMax-Hailuo-02 (1080P超清，10秒生成)",
-            "T2V-01-Director (文生视频导演版)",
-            "I2V-01-Director (图生视频导演版)",
-            "I2V-01-live (卡通漫画增强)",
-            "S2V-01 (主体参考)"
-        ]
+        for subdir in ['audio', 'images', 'videos', 'music', 'podcasts']:
+            (self.base_dir / subdir).mkdir(exist_ok=True)
+    
+    def save_file(self, data: str, filename: str, subdir: str) -> str:
+        """保存文件"""
+        filepath = self.base_dir / subdir / filename
         
-        model_choice = inquirer.list_input("选择视频模型", choices=models)
-        selected_model = model_choice.split(' ')[0]
+        if data.startswith('http'):
+            # 下载URL
+            import urllib.request
+            urllib.request.urlretrieve(data, filepath)
+        else:
+            # 保存十六进制数据
+            with open(filepath, 'wb') as f:
+                f.write(bytes.fromhex(data))
         
-        prompt = Prompt.ask("请输入视频描述")
+        return str(filepath)
+    
+    def play_audio(self, filepath: str):
+        """自动播放音频文件"""
+        import subprocess
+        import platform
         
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-            task = progress.add_task("提交任务...", total=None)
-            task_id = self.client.generate_video(prompt, selected_model)
-            progress.update(task, completed=True)
-        
-        console.print(f"[yellow]任务已提交，ID: {task_id}[/yellow]")
-        console.print("正在生成中，请稍候...")
-        
-        while True:
-            time.sleep(10)
-            status = self.client.query_video_status(task_id)
-            
-            if status['status'] == 'Success':
-                console.print(f"[green]视频生成完成！[/green]")
-                
-                # 自动下载
-                filename = f"video_{task_id}.mp4"
-                with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
-                    download_task = progress.add_task("下载视频中...", total=None)
-                    filepath = self.client.download_file(status['file_id'], filename, "video")
-                    progress.update(download_task, completed=True)
-                
-                console.print(f"[green]视频已下载: {filepath}[/green]")
-                break
-            elif status['status'] == 'Fail':
-                console.print("[red]视频生成失败[/red]")
-                break
+        try:
+            system = platform.system()
+            if system == "Windows":
+                subprocess.run(["start", filepath], shell=True, check=True)
+            elif system == "Darwin":  # macOS
+                subprocess.run(["afplay", filepath], check=True)
+            elif system == "Linux":
+                subprocess.run(["mpg123", filepath], check=True)
             else:
-                console.print(f"状态: {status['status']}...")
+                print(f"📁 音频已保存，请手动播放: {filepath}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print(f"📁 音频已保存，请手动播放: {filepath}")
 
 def main():
-    parser = argparse.ArgumentParser(description='MiniMax AI 统一命令行工具')
-    parser.add_argument('--chat', help='智能对话模式', nargs='+')
-    parser.add_argument('--image', help='图像生成')
-    parser.add_argument('--video', help='视频生成')
-    parser.add_argument('--music', help='音乐生成')
-    parser.add_argument('--clone', help='语音克隆')
-    parser.add_argument('--aspect-ratio', dest='aspect_ratio', default='1:1', 
-                       choices=['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'])
-    parser.add_argument('--count', type=int, default=1, choices=range(1, 10))
-    parser.add_argument('--interactive', '-i', action='store_true', help='交互模式')
-    parser.add_argument('--podcast', help='生成播客 (主题内容)')
-    parser.add_argument('--scene', choices=['solo', 'dialogue', 'panel', 'news', 'storytelling', 'interview'], 
-                       default='solo', help='播客场景')
-    parser.add_argument('--voice', action='append', help='自定义音色 (可多次使用)')
-    parser.add_argument('--role-name', action='append', dest='role_names', help='角色名称，与--voice一一对应 (可多次使用)')
-    parser.add_argument('--duration', type=int, default=5, help='播客时长(分钟，1-30)')
-    parser.add_argument('--music-style', choices=['electronic', 'folk', 'classical', 'pop', 'ambient'], 
-                       help='背景音乐风格')
-    parser.add_argument('--output', help='输出文件名')
-    parser.add_argument('--no-music', action='store_true', help='禁用背景音乐')
-    parser.add_argument('--no-progress', action='store_true', help='禁用进度条')
+    """主函数"""
+    parser = argparse.ArgumentParser(description='MiniMax AI 工具')
+    
+    # 🎯 核心功能（参数支持内容或.txt/.md文件路径）
+    generate_group = parser.add_argument_group('核心功能（参数支持内容或.txt/.md文件路径）')
+    generate_group.add_argument('-c', '--chat', metavar='对话内容', help='AI智能对话')
+    generate_group.add_argument('-i', '--image', metavar='图像描述', help='AI图像生成')
+    generate_group.add_argument('-v', '--video', metavar='视频描述', help='AI视频生成')
+    generate_group.add_argument('-m', '--music', metavar='音乐描述', help='AI音乐生成')
+    generate_group.add_argument('-t', '--tts', metavar='语音文本', help='文本转语音')
+    generate_group.add_argument('-p', '--podcast', metavar='播客主题', help='AI播客生成')
+    
+    # 🎨 图像生成选项
+    image_group = parser.add_argument_group('图像生成选项')
+    image_group.add_argument('--n', type=int, default=1, choices=range(1, 10), help='生成图片数量 (1-9)，默认1')
+    image_group.add_argument('--aspect-ratio', default='1:1', choices=['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'], help='图像宽高比，默认1:1')
+    image_group.add_argument('--seed', type=int, help='随机种子，相同种子生成相似图片')
+    
+    # 🎭 音色管理
+    voice_group = parser.add_argument_group('音色管理')
+    voice_group.add_argument('--voice', type=str, default="female-chengshu", 
+                            help='指定音色ID (如: male-qn-jingying, female-yujie)')
+    voice_group.add_argument('-l', '--list-voices', choices=['system', 'cloning', 'generation', 'music', 'all'], 
+                            help='查询可用音色列表')
+    voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
+    voice_group.add_argument('-f', '--filter-voices', type=str, help='过滤音色列表关键词')
+    
+    # 🎵 音乐生成
+    music_group = parser.add_argument_group('音乐生成')
+    music_group.add_argument('--lyrics', help='音乐歌词内容或文件路径(.txt/.md) [必填: 10-600字符]')
+    
+    # 📺 视频管理
+    video_group = parser.add_argument_group('视频管理')
+    video_group.add_argument('-s', '--video-status', metavar='任务ID', help='查询视频状态（传入task_id）')
+    video_group.add_argument('-d', '--download-video', metavar='文件ID', help='下载视频文件（传入file_id）')
+    
+    # ⚙️ 通用选项
+    common_group = parser.add_argument_group('通用选项')
+    common_group.add_argument('-I', '--interactive', action='store_true', help='交互模式')
+    common_group.add_argument('-V', '--verbose', action='store_true', help='显示详细日志')
+    common_group.add_argument('-P', '--play', action='store_true', help='生成后自动播放音频')
     
     args = parser.parse_args()
     
     client = MiniMaxClient()
+    file_mgr = FileManager()
     
-    # 命令行模式
-    if args.chat:
-        message = ' '.join(args.chat)
-        response = client.chat_completion(message)
-        print(response)
+    if args.verbose:
+        client.verbose = True
+    
+    if args.interactive:
+        print("💬 MiniMax AI 交互模式 (输入 'quit' 退出)")
+        while True:
+            try:
+                cmd = input("\n选择功能 [chat/image/video/music/tts/quit]: ").strip()
+                if cmd == 'quit':
+                    break
+                elif cmd == 'chat':
+                    message = input("消息: ")
+                    print(client.chat(message))
+                elif cmd == 'image':
+                    prompt = input("描述: ")
+                    urls = client.image(prompt)
+                    for url in urls:
+                        print(url)
+                        save = input("保存文件? (y/n): ")
+                        if save.lower() == 'y':
+                            filepath = file_mgr.save_file(url, f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", "images")
+                            print(f"✅ 已保存: {filepath}")
+                elif cmd == 'video':
+                    prompt = input("描述: ")
+                    task_id = client.video(prompt)
+                    print(f"🎬 任务ID: {task_id}")
+                    check = input("查询状态? (y/n): ")
+                    if check.lower() == 'y':
+                        status = client.video_status(task_id)
+                        print(f"状态: {status}")
+                elif cmd == 'music':
+                    prompt = input("音乐描述: ")
+                    lyrics = input("歌词内容: ")
+                    if not lyrics.strip():
+                        print("❌ 音乐生成需要歌词内容")
+                        continue
+                    
+                    audio = client.music(prompt, lyrics)
+                    if audio:
+                        filepath = file_mgr.save_file(audio, f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "music")
+                        print(f"✅ 音乐已保存: {filepath}")
+                elif cmd == 'tts':
+                    text = input("文本: ")
+                    voice = input("音色ID (默认 female-chengshu): ").strip() or "female-chengshu"
+                    audio = client.tts(text, voice)
+                    if audio:
+                        filepath = file_mgr.save_file(audio, f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "audio")
+                        print(f"✅ 已保存: {filepath}")
+                elif cmd == 'podcast':
+                    topic = input("播客主题: ")
+                    voice = input("音色ID (可选，默认多人对话): ").strip()
+                    if voice:
+                        audio = client.podcast(topic, voice=voice)
+                    else:
+                        audio = client.podcast(topic)
+                    if audio:
+                        filepath = file_mgr.save_file(audio, f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "podcasts")
+                        print(f"✅ 播客已保存: {filepath}")
+            except KeyboardInterrupt:
+                break
+    
+    elif args.chat:
+        content = args.chat
+        if content.endswith(('.txt', '.md')) and Path(content).exists():
+            with open(content, 'r', encoding='utf-8') as f:
+                content = f.read()
+        print(client.chat(content))
     elif args.image:
-        urls = client.generate_image(
-            args.image, 
-            aspect_ratio=args.aspect_ratio, 
-            n=args.count
-        )
-        for url in urls:
-            print(url)
+        prompt = args.image
+        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
+            with open(prompt, 'r', encoding='utf-8') as f:
+                prompt = f.read()
+        urls = client.image(prompt, n=args.n, aspect_ratio=args.aspect_ratio, seed=args.seed)
+        if urls:
+            for i, url in enumerate(urls):
+                filepath = file_mgr.save_file(url, f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{i+1}.jpg", "images")
+                print(f"✅ 图片已保存: {filepath}")
+                print(f"🔗 图片URL: {url}")
+                if args.play:
+                    import webbrowser
+                    webbrowser.open(url)
     elif args.video:
-        task_id = client.generate_video(args.video)
-        print(f"任务ID: {task_id}")
+        prompt = args.video
+        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
+            with open(prompt, 'r', encoding='utf-8') as f:
+                prompt = f.read()
+        task_id = client.video(prompt)
+        print(f"🎬 视频生成任务已提交")
+        print(f"📊 任务ID: {task_id}")
+        print(f"💡 查询状态: python minimax_cli.py -s {task_id}")
+        print(f"⏱️  预计2-5分钟完成，可多次查询状态")
     elif args.music:
-        # 支持纯音乐生成
-        try:
-            prompt = args.music
-            
-            # 检测是否为纯音乐请求
-            instrumental_keywords = ['纯音乐', '背景音乐', 'bgm', 'instrumental', '无歌词', '配乐']
-            is_instrumental = any(keyword in prompt.lower() for keyword in instrumental_keywords)
-            
-            if is_instrumental:
-                # 纯音乐占位符 - 使用更专业的无歌词描述
-                instrumental_lyrics = """[Instrumental]
-纯器乐演奏
-无歌词无人声
-纯音乐背景音乐
-管弦乐/电子合成器
-营造氛围音乐"""
-                audio_hex = client.generate_music(
-                    prompt=prompt,
-                    lyrics=instrumental_lyrics
-                )
-            else:
-                # 带歌词的音乐
-                audio_hex = client.generate_music(
-                    prompt=prompt,
-                    lyrics="""[Intro]
-轻柔的旋律开始
-[Verse]
-这是属于你的音乐时光
-每一个音符都充满温暖
-[Outro]
-音乐渐渐结束"""
-                )
-            
-            # 保存音频文件
-            from datetime import datetime
-            
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            if is_instrumental:
-                filename = f"instrumental_{timestamp}.mp3"
-            else:
-                filename = f"music_{timestamp}.mp3"
-            
-            audio_bytes = bytes.fromhex(audio_hex)
-            
-            with open(filename, 'wb') as f:
-                f.write(audio_bytes)
-            
-            print(f"[SUCCESS] 音乐生成完成: {filename}")
-            print(f"[INFO] 文件大小: {len(audio_bytes):,} bytes")
-            print(f"[INFO] 类型: {'纯音乐' if is_instrumental else '带歌词音乐'}")
-            
-        except Exception as e:
-            print(f"[ERROR] 音乐生成失败: {e}")
-    elif args.podcast:
-        try:
-            from podcast_system.podcast_generator import PodcastGenerator
-            generator = PodcastGenerator(client)
-            
-            # 验证参数
-            if not generator.validate_inputs(args.podcast, args.scene, args.duration, args.voice):
-                sys.exit(1)
-            
-            # 构建参数
-            kwargs = {
-                "topic": args.podcast,
-                "scene": args.scene,
-                "duration": args.duration,
-                "show_progress": not args.no_progress
-            }
-            
-            if args.voice:
-                kwargs["voices"] = args.voice
-            if args.role_names:
-                kwargs["role_names"] = args.role_names
-            if args.music_style:
-                kwargs["music_style"] = args.music_style
-            if args.output:
-                kwargs["output_filename"] = args.output
-            
-            # 生成播客
-            result = generator.generate_podcast(**kwargs)
-            
-            if result and os.path.exists(result):
-                file_size = os.path.getsize(result)
-                print(f"✅ 播客生成完成: {result}")
-                print(f"📊 文件大小: {file_size:,} bytes")
-                
-                # 自动播放选项
-                if interactive_mode and console:
-                    from rich.prompt import Confirm
-                    if Confirm.ask("是否播放播客？"):
-                        try:
-                            import subprocess
-                            import platform
-                            
-                            if platform.system() == "Windows":
-                                os.startfile(result)
-                            elif platform.system() == "Darwin":
-                                subprocess.call(["open", result])
-                            else:
-                                subprocess.call(["xdg-open", result])
-                                
-                        except Exception as e:
-                            print(f"无法自动播放: {e}")
-            else:
-                print("❌ 播客生成失败")
-                
-        except ImportError as e:
-            print(f"播客模块未找到: {e}")
-        except Exception as e:
-            print(f"❌ 播客生成出错: {e}")
-    elif args.interactive:
-        if not interactive_mode:
-            print("请先安装依赖: pip install inquirer rich")
+        # 处理文件路径或文本内容
+        prompt = args.music
+        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
+            with open(prompt, 'r', encoding='utf-8') as f:
+                prompt = f.read()
+        
+        # 歌词为必填
+        if not args.lyrics:
+            print("❌ 音乐生成需要歌词参数")
+            print("💡 使用: --lyrics '歌词内容' 或 --lyrics lyrics.txt")
+            print("📝 提示: 使用换行符分隔，支持[Intro][Verse][Chorus][Bridge][Outro]结构")
             sys.exit(1)
         
-        ui = InteractiveUI(client)
+        lyrics = args.lyrics
+        if lyrics.endswith(('.txt', '.md')) and Path(lyrics).exists():
+            with open(lyrics, 'r', encoding='utf-8') as f:
+                lyrics = f.read()
         
-        while True:
-            choice = ui.show_menu()
+        audio = client.music(prompt, lyrics)
+        if audio:
+            filepath = file_mgr.save_file(audio, f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "music")
+            print(filepath)
+            if args.play:
+                file_mgr.play_audio(filepath)
+    elif args.tts:
+        text = args.tts
+        if text.endswith(('.txt', '.md')) and Path(text).exists():
+            with open(text, 'r', encoding='utf-8') as f:
+                text = f.read()
+        audio = client.tts(text, args.voice)
+        if audio:
+            filepath = file_mgr.save_file(audio, f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "audio")
+            print(filepath)
+            if args.play:
+                file_mgr.play_audio(filepath)
+    elif args.podcast:
+        topic = args.podcast
+        if topic.endswith(('.txt', '.md')) and Path(topic).exists():
+            with open(topic, 'r', encoding='utf-8') as f:
+                topic = f.read()
+        audio = client.podcast(topic, args.voice)
+        if audio:
+            filepath = file_mgr.save_file(audio, f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "podcasts")
+            print(filepath)
+            if args.play:
+                file_mgr.play_audio(filepath)
+    elif args.video_status:
+        status = client.video_status(args.video_status)
+        print(json.dumps(status, indent=2, ensure_ascii=False))
+        
+        # 如果成功，提供下载链接
+        if status.get('status') == 'Success':
+            file_id = status.get('file_id')
+            print(f"🎬 视频已生成，文件ID: {file_id}")
+            print(f"📥 下载命令: python minimax_cli.py --download-video {file_id}")
+    elif args.download_video:
+        filepath = client.download_video(args.download_video)
+        print(f"✅ 视频已下载: {filepath}")
+    elif args.list_voices or args.refresh_voices:
+        voice_type = args.list_voices or "all"
+        
+        if args.refresh_voices:
+            # 强制刷新缓存
+            cache_file = Path("./cache/voices.json")
+            if cache_file.exists():
+                cache_file.unlink()
+                print("🔄 已清除音色缓存")
+        
+        voices_data = client.list_voices(voice_type)
+        if not voices_data:
+            print("❌ 无法获取音色列表")
+            return
             
-            if "智能对话" in choice:
-                ui.chat_interface()
-            elif "图像生成" in choice:
-                ui.image_interface()
-            elif "视频生成" in choice:
-                ui.video_interface()
-            elif "音乐生成" in choice:
-                print("音乐生成功能开发中...")
-            elif "语音克隆" in choice:
-                print("语音克隆功能开发中...")
-            elif "电台播客" in choice:
-                podcast_ui = PodcastUI(client)
-                podcast_ui.show_podcast_menu()
-            elif "退出" in choice:
-                console.print("[yellow]感谢使用！[/yellow]")
-                break
+        filter_keyword = args.filter_voices
+        
+        # 格式化输出
+        def format_voices(voice_list, title):
+            if not voice_list:
+                return
+            
+            print(f"\n🎭 {title}")
+            for voice in voice_list:
+                voice_id = voice.get('voice_id', '')
+                name = voice.get('voice_name', voice_id)
+                desc = " ".join(voice.get('description', [])) if isinstance(voice.get('description'), list) else str(voice.get('description', ''))
+                
+                # 过滤关键词
+                if filter_keyword and filter_keyword.lower() not in f"{voice_id} {name} {desc}".lower():
+                    continue
+                    
+                print(f"├─ {voice_id:<20} {name:<15} [{desc}]")
+        
+        # 系统音色
+        format_voices(voices_data.get('system_voice', []), "系统音色")
+        format_voices(voices_data.get('voice_cloning', []), "克隆音色")
+        format_voices(voices_data.get('voice_generation', []), "生成音色")
+        format_voices(voices_data.get('music_generation', []), "音乐音色")
+        
+        total_count = sum(len(voices_data.get(k) or []) for k in ['system_voice', 'voice_cloning', 'voice_generation', 'music_generation'])
+        print(f"\n📊 总计: {total_count} 个音色")
+        
     else:
         parser.print_help()
 
