@@ -328,93 +328,161 @@ class MiniMaxClient:
             self._log(f"❌ 获取音色列表失败: {e}", "ERROR")
             return {}
     
-    def podcast(self, topic: str, scene: str = "dialogue", voices: list = None, voice: str = None) -> str:
-        """多人对话播客生成"""
-        self._log("🎙️ 开始生成多人对话播客...")
+    def podcast(self, user_input: str) -> str:
+        """智能播客生成 - 完全自然语言输入"""
+        self._log("🎙️ 开始生成智能播客...")
         
-        # 定义角色和音色
-        if voice:
-            # 使用指定的音色
-            host_voice = voice
-            guest1_voice = voice
-            guest2_voice = voice
+        # 读取系统提示词模板
+        template_path = Path("templates/podcast_system_prompt.txt")
+        if template_path.exists():
+            with open(template_path, 'r', encoding='utf-8') as f:
+                system_prompt = f.read()
         else:
-            # 使用默认音色组合
-            host_voice = "female-yujie"
-            guest1_voice = "male-qn-jingying"
-            guest2_voice = "female-chengshu"
+            system_prompt = "你是一个智能播客生成助手，请根据用户描述生成JSON格式对话。"
         
-        # 生成多人对话内容
-        prompt = f"""请为播客节目生成关于'{topic}'的**多人对话**，格式如下：
-
-        **主持人小雅**：大家好，欢迎收听本期播客...
-
-        **嘉宾小明**：谢谢小雅，我认为...
-
-        **嘉宾小红**：我补充一点...
-
-        **主持人小雅**：感谢两位的分享...
-
-        要求：
-        1. 至少6-8轮完整对话
-        2. 每段发言50-80字
-        3. 包含开场、深入讨论、总结
-        4. 用**角色名**：开头标识说话人
-        5. 总长度1000-1500字
-        """
-        
-        content = self.chat(prompt)
-        self._log(f"📄 生成对话内容: {len(content)} 字符")
-        
-        # 打印原始内容用于调试
-        if self.verbose:
-            self._log(f"📝 原始内容: {content[:200]}...")
-        
-        # 解析对话段落 - 增强匹配规则
-        paragraphs = [p.strip() for p in content.split('\n') if p.strip() and '：**' in p]
-        self._log(f"🎭 解析对话段落: {len(paragraphs)} 段")
-        
-        if len(paragraphs) == 0:
-            self._log("⚠️  未找到标准格式对话，尝试备用解析...")
-            # 备用解析：寻找包含冒号的行
-            paragraphs = [p.strip() for p in content.split('\n') if p.strip() and (':' in p or '：' in p)]
-            self._log(f"🔄 备用解析结果: {len(paragraphs)} 段")
-        
-        # 为每段分配音色和生成音频
-        voice_mapping = {
-            "主持人小雅": host_voice,
-            "嘉宾小明": guest1_voice,
-            "嘉宾小红": guest2_voice
+        # 定义JSON schema确保格式正确
+        json_schema = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "speaker": {"type": "string", "description": "说话人姓名"},
+                    "text": {"type": "string", "description": "说话内容"},
+                    "voice_id": {"type": "string", "description": "音色ID"},
+                    "emotion": {"type": "string", "enum": ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm"], "description": "情感类型"}
+                },
+                "required": ["speaker", "text", "voice_id", "emotion"],
+                "additionalProperties": False
+            },
+            "minItems": 2
         }
         
-        audio_segments = []
-        valid_paragraphs = 0
+        # 构建消息结构
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input}
+        ]
         
-        for para in paragraphs:
-            for role, voice in voice_mapping.items():
-                role_markers = [f"**{role}**", f"{role}:", f"{role}："]
-                for marker in role_markers:
-                    if para.startswith(marker):
-                        text = para.replace(marker, "").strip()
-                        if text and len(text) > 10:
-                            self._log(f"🗣️ {role}({voice}): {text[:50]}...")
-                            
-                            # 为每个角色使用不同音色生成音频
-                            audio = self.tts(text, voice)
-                            audio_segments.append(audio)
-                            valid_paragraphs += 1
-                            break
+        # 使用标准格式请求，避免response_format参数
+        data = {
+            "model": "MiniMax-Text-01",
+            "messages": messages,
+            "max_tokens": 20480,
+            "temperature": 0.8
+        }
         
-        if audio_segments:
-            # 合并所有音频段落
-            self._log(f"🎵 合并{len(audio_segments)}段音频...")
-            # 简单合并：按顺序连接
-            combined_audio = "".join(audio_segments)
-            return combined_audio
-        else:
-            self._log(f"❌ 播客生成失败: 有效段落不足({valid_paragraphs}段)", "ERROR")
-            if not self.verbose:
-                self._log("💡 使用 -V 查看详细内容分析")
+        response = self._request("POST", "text/chatcompletion_v2", json=data)
+        content = response['choices'][0]['message']['content']
+        
+        # 保存原始响应到本地文件
+        log_dir = Path('./output/logs')
+        log_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # 保存完整的API响应
+        response_log = {
+            "timestamp": timestamp,
+            "user_input": user_input,
+            "response": content,
+            "dialogue_count": None,
+            "status": "success"
+        }
+        
+        try:
+            # 清理可能的Markdown格式并解析JSON
+            cleaned_content = content.strip()
+            if cleaned_content.startswith('```json'):
+                cleaned_content = cleaned_content[7:]
+            if cleaned_content.endswith('```'):
+                cleaned_content = cleaned_content[:-3]
+            cleaned_content = cleaned_content.strip()
+            
+            dialogues = json.loads(cleaned_content)
+            response_log["dialogue_count"] = len(dialogues)
+            
+            # 保存解析后的JSON文件
+            json_file = log_dir / f"podcast_dialogue_{timestamp}.json"
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(dialogues, f, ensure_ascii=False, indent=2)
+            
+            # 保存完整响应日志
+            log_file = log_dir / f"podcast_response_{timestamp}.json"
+            with open(log_file, 'w', encoding='utf-8') as f:
+                json.dump(response_log, f, ensure_ascii=False, indent=2)
+            
+            self._log(f"📝 对话内容已保存: {json_file}")
+            self._log(f"🎭 成功解析对话：{len(dialogues)} 段")
+            
+            # 为每段生成音频
+            audio_segments = []
+            for dialogue in dialogues:
+                speaker = dialogue.get('speaker', '未知')
+                text = dialogue.get('text', '')
+                voice_id = dialogue.get('voice_id', 'female-chengshu')
+                emotion = dialogue.get('emotion', 'calm')
+                
+                if text and len(text.strip()) > 5:
+                    # 验证并修正情感类型
+                    valid_emotions = ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm"]
+                    corrected_emotion = emotion.lower()
+                    if corrected_emotion not in valid_emotions:
+                        # 智能映射到有效情感
+                        emotion_mapping = {
+                            "excited": "happy",
+                            "joyful": "happy",
+                            "delighted": "happy",
+                            "cheerful": "happy",
+                            "upset": "sad",
+                            "depressed": "sad",
+                            "disappointed": "sad",
+                            "mad": "angry",
+                            "furious": "angry",
+                            "irritated": "angry",
+                            "scared": "fearful",
+                            "terrified": "fearful",
+                            "anxious": "fearful",
+                            "shocked": "surprised",
+                            "amazed": "surprised",
+                            "startled": "surprised",
+                            "disgusted": "disgusted",
+                            "revolted": "disgusted",
+                            "neutral": "calm",
+                            "thoughtful": "calm",
+                            "curious": "surprised",
+                            "concerned": "fearful",
+                            "nostalgic": "sad",
+                            "proud": "happy",
+                            "confident": "happy"
+                        }
+                        corrected_emotion = emotion_mapping.get(corrected_emotion, "calm")
+                        self._log(f"⚠️ 情感映射: {emotion} → {corrected_emotion}")
+                    
+                    self._log(f"🗣️ {speaker}({voice_id}): {text[:50]}...")
+                    audio = self.tts(text.strip(), voice_id, corrected_emotion)
+                    audio_segments.append(audio)
+            
+            if audio_segments:
+                # 合并所有音频
+                combined_audio = "".join(audio_segments)
+                self._log("✅ 播客生成完成")
+                return combined_audio
+            else:
+                self._log("❌ 没有有效音频内容", "ERROR")
+                return ""
+                
+        except json.JSONDecodeError as e:
+            response_log["status"] = "error"
+            response_log["error"] = str(e)
+            
+            # 保存错误日志
+            log_file = log_dir / f"podcast_error_{timestamp}.json"
+            with open(log_file, 'w', encoding='utf-8') as f:
+                json.dump(response_log, f, ensure_ascii=False, indent=2)
+                
+            self._log(f"❌ JSON解析失败: {e}", "ERROR")
+            self._log(f"📝 错误日志已保存: {log_file}")
+            if self.verbose:
+                self._log(f"📝 原始内容: {content}")
             return ""
 
 class FileManager:
@@ -557,12 +625,8 @@ def main():
                         filepath = file_mgr.save_file(audio, f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "audio")
                         print(f"✅ 已保存: {filepath}")
                 elif cmd == 'podcast':
-                    topic = input("播客主题: ")
-                    voice = input("音色ID (可选，默认多人对话): ").strip()
-                    if voice:
-                        audio = client.podcast(topic, voice=voice)
-                    else:
-                        audio = client.podcast(topic)
+                    user_input = input("播客描述: ")
+                    audio = client.podcast(user_input)
                     if audio:
                         filepath = file_mgr.save_file(audio, f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "podcasts")
                         print(f"✅ 播客已保存: {filepath}")
@@ -636,11 +700,11 @@ def main():
             if args.play:
                 file_mgr.play_audio(filepath)
     elif args.podcast:
-        topic = args.podcast
-        if topic.endswith(('.txt', '.md')) and Path(topic).exists():
-            with open(topic, 'r', encoding='utf-8') as f:
-                topic = f.read()
-        audio = client.podcast(topic, args.voice)
+        user_input = args.podcast
+        if user_input.endswith(('.txt', '.md')) and Path(user_input).exists():
+            with open(user_input, 'r', encoding='utf-8') as f:
+                user_input = f.read()
+        audio = client.podcast(user_input)
         if audio:
             filepath = file_mgr.save_file(audio, f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "podcasts")
             print(filepath)
