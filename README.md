@@ -28,14 +28,66 @@ python minimax_cli.py -c "你好，MiniMax"
 # 图像生成（支持高级参数）
 python minimax_cli.py -i "樱花树下的猫" --n 2 --aspect-ratio 16:9
 
-# 视频生成
-python minimax_cli.py -v "熊猫在竹林中漫步"
+# 高级图像生成（新模型支持）
+python minimax_cli.py -i "可爱的卡通人物" --image-model image-01-live --style-type 漫画
+# 自定义尺寸生成
+python minimax_cli.py -i "风景画" --width 1024 --height 768 --prompt-optimizer
+# Base64格式输出
+python minimax_cli.py -i "现代艺术" --response-format base64 --n 3
+# 添加水印和风格
+python minimax_cli.py -i "水彩画风格的山水" --style-type 水彩 --style-weight 0.9 --add-watermark
+
+# 图生图（基于参考图片生成）
+python minimax_cli.py -i2i person.jpg "该人物穿着古装，在古代建筑前"
+# 图生图与风格化结合
+python minimax_cli.py -i2i portrait.jpg "动漫风格的人物" --image-model image-01-live --style-type 漫画
+# 高级图生图
+python minimax_cli.py -i2i photo.jpg "油画风格的艺术肖像" --n 2 --seed 12345 --add-watermark
+
+# 视频生成（支持运镜控制）
+python minimax_cli.py -v "熊猫在竹林中漫步[推进]" --video-model MiniMax-Hailuo-2.3
+# 导演模型（专业运镜）
+python minimax_cli.py -v "主角[左摇]看夕阳，然后[拉远]显示全景" --video-model T2V-01-Director
+# 镜头序列控制
+python minimax_cli.py -v "动作场景" --camera-sequence '[{"action":"推进","timing":"开始"},{"action":"晃动","timing":"打斗"}]'
+# 高质量长视频
+python minimax_cli.py -v "自然风景[上升]俯瞰" --video-duration 10 --video-resolution 1080P --fast-preprocessing
+
+# 图生视频（让静态图片动起来）
+python minimax_cli.py -i2v image.jpg "人物开始微笑和眨眼" --i2v-model I2V-01-Director
+# 卡通风格增强
+python minimax_cli.py -i2v cartoon.png "角色开始跳舞" --i2v-model I2V-01-live
+# 高质量图生视频
+python minimax_cli.py -i2v photo.jpg "镜头[推进]展示细节" --i2v-model MiniMax-Hailuo-2.3 --i2v-duration 10
+
+# 首尾帧视频生成（图片到图片的过渡动画）
+python minimax_cli.py -se start.jpg end.jpg
+# 高清首尾帧视频
+python minimax_cli.py -se start.jpg end.jpg --se-duration 10 --se-resolution 1080P
+# 添加水印和回调
+python minimax_cli.py -se before.jpg after.jpg --add-watermark --callback-url https://example.com/callback
+
+# 主体参考视频生成（基于人物图片生成视频）
+python minimax_cli.py -s2v person.jpg "一个人跑步并微笑"
+# 添加水印的高级生成
+python minimax_cli.py -s2v character.jpg "角色走向镜头并眨眼" --add-watermark --no-prompt-optimizer
 
 # 音乐生成（需要歌词）
 python minimax_cli.py -m "轻松愉快的背景音乐" --lyrics "[Verse]\n阳光洒落\n[Chorus]\n快乐每一天"
 
-# 文本转语音
-python minimax_cli.py -t "你好，世界" --voice female-chengshu
+# 高级音乐生成（music-2.0新功能）
+python minimax_cli.py -m "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆" --lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" --music-watermark
+# 高质量音频输出
+python minimax_cli.py -m "摇滚音乐,激情,充满力量" --lyrics "[verse]\n吉他声响起\n[chorus]\n燃烧的青春" --music-format wav --music-bitrate 256000 --music-sample-rate 44100
+# 流式传输（hex格式）
+python minimax_cli.py -m "电子音乐,未来感,科技" --lyrics "未来世界\n代码与梦想" --music-stream
+
+# 文本转语音（支持高级参数）
+python minimax_cli.py -t "你好，世界" --voice female-chengshu --emotion happy --speed 1.2
+# 高级语音合成
+python minimax_cli.py -t "你好，世界" --format wav --sample-rate 44100 --channel 2
+# 流式语音合成
+python minimax_cli.py -t "你好，世界" --stream --output-format url
 
 # AI播客生成
 python minimax_cli.py -p "人工智能如何改变未来"
@@ -48,11 +100,15 @@ python minimax_cli.py --list-voices
 
 | 功能 | 模型 | 描述 |
 |---|---|---|
-| **智能对话** | MiniMax-Text-01 | 支持超长上下文，思维链推理 |
-| **图像生成** | image-01 | 支持1-9张图片，多种宽高比 |
-| **视频生成** | MiniMax-Hailuo-02 | 1080P超清，10秒视频 |
-| **音乐创作** | music-1.5 | 自定义歌词，支持多种风格 |
-| **语音合成** | speech-2.5-hd-preview | 100+音色，情感控制 |
+| **智能对话** | MiniMax-M2 | 支持超长上下文，Interleaved Thinking，Tool Use能力 |
+| **图像生成** | image-01系列 | 支持1-9张图片，多种宽高比，风格控制 |
+| **图生图** | image-01系列 | 基于参考图片生成，支持人像character类型 |
+| **视频生成** | MiniMax-Hailuo-2.3 | 肢体动作、物理表现与指令遵循能力全面升级 |
+| **图生视频** | I2V-01系列 | 静态图片转换为动态视频，支持运镜控制 |
+| **首尾帧生成** | MiniMax-Hailuo-02 | 起始到结束图片的过渡动画，高清输出 |
+| **主体参考生成** | S2V-01 | 基于人物主体图片生成视频，保持面部特征 |
+| **音乐创作** | music-2.0 | 自定义歌词，支持流式传输和多种音频格式 |
+| **语音合成** | speech-2.6-hd | 300+音色，情感控制，40种语言支持 |
 | **AI播客** | 多模型组合 | 多人对话，多音色播客 |
 | **语音克隆** | voice_clone | 3秒快速克隆音色 |
 
@@ -76,13 +132,169 @@ python minimax_cli.py --list-voices
 
 ## 🎯 高级功能
 
+### 语音合成参数
+```bash
+python minimax_cli.py -t "文本内容" \
+    --voice female-chengshu \  # 音色选择
+    --emotion happy \          # 情感控制 [happy, sad, angry, fearful, disgusted, surprised, calm, fluent]
+    --speed 1.2 \              # 语速 [0.5-2.0]
+    --vol 1.5 \                # 音量 [0.1-10.0]
+    --pitch 5 \                # 语调 [-12到12]
+    --format wav \             # 音频格式 [mp3, pcm, flac, wav]
+    --sample-rate 44100 \      # 采样率 [8000,16000,22050,24000,32000,44100]
+    --bitrate 256000 \         # 比特率 [32000,64000,128000,256000]
+    --channel 2 \              # 声道数 [1,2]
+    --stream \                 # 流式输出
+    --language-boost Chinese \ # 语言增强
+    --subtitle \               # 启用字幕
+    --output-format url        # 输出格式 [hex, url]
+```
+
 ### 图像生成参数
 ```bash
 python minimax_cli.py -i "描述" \
-    --n 3 \                    # 生成3张图片
-    --aspect-ratio 16:9 \      # 16:9比例
-    --seed 12345              # 固定随机种子
+    --image-model image-01 \          # 图像生成模型 [image-01, image-01-live]
+    --n 3 \                           # 生成3张图片
+    --aspect-ratio 16:9 \             # 16:9比例 [1:1, 16:9, 4:3, 3:2, 2:3, 3:4, 9:16, 21:9]
+    --width 1024 --height 768 \      # 自定义尺寸（仅image-01模型，512-2048且8的倍数）
+    --seed 12345 \                    # 固定随机种子
+    --response-format url \           # 返回格式 [url, base64]
+    --prompt-optimizer \              # 启用prompt优化
+    --add-watermark \                 # 添加水印
+    --style-type 漫画 \               # 风格类型（仅image-01-live）：[漫画, 元气, 中世纪, 水彩]
+    --style-weight 0.8                # 风格权重 (0-1]
 ```
+
+### 图生图参数
+```bash
+python minimax_cli.py -i2i reference.jpg "描述" \
+    --image-model image-01 \          # 图像生成模型 [image-01, image-01-live]
+    --n 2 \                           # 生成2张图片
+    --style-type 漫画 \               # 风格类型（仅image-01-live）
+    --add-watermark \                 # 添加水印
+    --seed 12345 \                    # 固定随机种子
+    --response-format url             # 返回格式 [url, base64]
+```
+
+### 图生图特性
+- **参考类型**: 当前仅支持 character (人像) 类型
+- **图片要求**: JPG/JPEG/PNG，小于10MB，建议单人正面照片
+- **输入方式**: 本地文件路径或公网URL
+- **兼容性**: 与所有图像生成参数兼容（风格、尺寸、优化等）
+
+### 图像模型特性
+- **image-01**: 基础模型，支持自定义尺寸、prompt优化、水印
+- **image-01-live**: 风格化模型，支持漫画、元气、中世纪、水彩四种风格
+
+### 视频生成参数
+```bash
+python minimax_cli.py -v "描述" \
+    --video-model MiniMax-Hailuo-2.3 \    # 视频生成模型
+    --video-duration 6 \                  # 视频时长（秒）
+    --video-resolution auto \             # 分辨率 [auto, 720P, 768P, 1080P]
+    --first-frame image.jpg \             # 首帧图片
+    --last-frame end.jpg \                # 尾帧图片
+    --subject-image character.jpg \        # 主体参考图片
+    --video-name my_video \               # 视频文件名
+    --no-prompt-optimizer \               # 禁用prompt优化
+    --fast-preprocessing \                # 快速预处理
+    --add-watermark \                     # 添加水印
+    --callback-url https://example.com/callback \  # 回调URL
+    --camera-sequence '[{"action":"推进","timing":"开始"},{"action":"左摇","timing":"中间"}]' # 镜头序列
+```
+
+### 镜头控制（15种运镜指令）
+```bash
+# 直接在prompt中使用镜头指令
+python minimax_cli.py -v "一个人[推进]看书，然后[左摇]看窗外"
+
+# 使用JSON镜头序列
+python minimax_cli.py -v "故事场景" \
+    --camera-sequence '[{"action":"推进","timing":"开始"},{"action":"固定","timing":"对话"}]'
+
+# 支持的运镜指令
+[左移] [右移] [左摇] [右摇] [推进] [拉远]
+[上升] [下降] [上摇] [下摇] [变焦推近] [变焦拉远]
+[晃动] [跟随] [固定]
+```
+
+### 图生视频参数
+```bash
+python minimax_cli.py -i2v image.jpg "描述" \
+    --i2v-model I2V-01-Director \         # 图生视频模型
+    --i2v-duration 6 \                    # 视频时长（秒）
+    --i2v-resolution auto \               # 分辨率 [auto, 512P, 720P, 768P, 1080P]
+    --no-prompt-optimizer \               # 禁用prompt优化
+    --fast-preprocessing \                # 快速预处理
+    --add-watermark \                     # 添加水印
+    --callback-url https://example.com/callback \  # 回调URL
+```
+
+### 首尾帧生成参数
+```bash
+python minimax_cli.py -se start.jpg end.jpg \
+    --se-duration 6 \              # 视频时长（秒）[6, 10]
+    --se-resolution 768P \         # 分辨率 [768P, 1080P]
+    --no-prompt-optimizer \        # 禁用prompt优化
+    --add-watermark \              # 添加水印
+    --callback-url https://example.com/callback  # 回调URL
+```
+
+### 首尾帧生成特性
+- **专用模型**: 仅支持 MiniMax-Hailuo-02 模型
+- **高分辨率**: 仅支持 768P 和 1080P 高清输出
+- **精确过渡**: 起始图片到结束图片的平滑过渡动画
+- **时长限制**: 支持6秒和10秒两种时长
+- **图片要求**: 与图生视频相同的格式和尺寸要求
+
+### 主体参考视频生成参数
+```bash
+python minimax_cli.py -s2v subject.jpg "描述" \
+    --s2v-prompt-optimizer \     # 启用prompt优化（默认启用）
+    --no-prompt-optimizer \      # 禁用prompt优化
+    --add-watermark \            # 添加水印
+    --callback-url https://example.com/callback  # 回调URL
+```
+
+### 主体参考视频生成特性
+- **专用模型**: 仅支持 S2V-01 模型
+- **主体类型**: 当前仅支持 character (人物面部)
+- **保持特征**: 生成视频时保持人物面部特征
+- **图片要求**: 与图生视频相同的格式和尺寸要求
+- **描述限制**: 视频描述最多2000字符
+
+### 音乐生成参数
+```bash
+python minimax_cli.py -m "独立民谣,忧郁,内省" \
+    --lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" \
+    --music-stream \               # 启用流式传输（仅支持hex格式）
+    --music-format hex \            # 返回格式 [hex, url]，默认hex
+    --music-sample-rate 44100 \     # 采样率 [16000, 24000, 32000, 44100]
+    --music-bitrate 256000 \        # 比特率 [32000, 64000, 128000, 256000]
+    --music-encoding mp3 \          # 音频格式 [mp3, wav, pcm]
+    --music-watermark              # 添加音频水印（仅非流式生效）
+```
+
+### 音乐生成特性
+- **最新模型**: music-2.0，支持更高音乐质量和更丰富风格
+- **长度限制**: 描述[10, 2000]字符，歌词[10, 3000]字符
+- **结构标签**: 支持[Intro][Verse][Chorus][Bridge][Outro]优化音乐结构
+- **输出格式**: 支持hex和url两种格式，url有效期24小时
+- **音频质量**: 支持16-44.1kHz采样率，32-256kbps比特率
+- **流式传输**: 支持实时生成，hex格式输出
+- **水印功能**: 可选择在音频末尾添加水印
+
+### 图生视频模型特性
+- **I2V-01-Director**: 导演版，支持15种运镜指令，专业控制
+- **I2V-01-live**: 卡通/漫画风格增强，适合动画内容
+- **I2V-01**: 基础图生视频模型，稳定可靠
+- **MiniMax-Hailuo系列**: 也可用于图生视频，支持更高质量输出
+
+### 图片格式要求
+- **支持格式**: JPG, JPEG, PNG, WebP
+- **文件大小**: 小于20MB
+- **尺寸要求**: 短边像素大于300px，长宽比2:5到5:2之间
+- **输入方式**: 本地文件路径、公网URL、Base64 Data URL
 
 ### 视频状态管理
 ```bash
@@ -120,21 +332,98 @@ client = MiniMaxClient()
 response = client.chat("介绍一下人工智能的发展历史")
 print(response)
 
-# 生成图片
+# 生成图片（基础）
 urls = client.image("月光下的猫，水墨画风格", n=2, aspect_ratio="16:9")
 for url in urls:
     print(url)
 
-# 生成音乐
+# 高级图像生成
+漫画风格_urls = client.image(
+    "可爱的卡通人物",
+    model="image-01-live",
+    n=3,
+    style_type="漫画",
+    style_weight=0.9,
+    aigc_watermark=True
+)
+
+自定义尺寸_urls = client.image(
+    "风景画",
+    model="image-01",
+    width=1024,
+    height=768,
+    prompt_optimizer=True,
+    seed=12345
+)
+
+# 图生图
+portrait_urls = client.image(
+    "该人物穿着古装，在古代建筑前",
+    model="image-01",
+    n=2,
+    reference_image="person.jpg",
+    aigc_watermark=True
+)
+
+# 风格化图生图
+漫画风格_urls = client.image(
+    "动漫风格的人物",
+    model="image-01-live",
+    reference_image="portrait.jpg",
+    style_type="漫画",
+    style_weight=0.9,
+    n=3
+)
+
+# 生成音乐（基础）
 audio = client.music(
     "轻松愉悦的背景音乐",
     "[Verse]\n阳光洒落大地\n[Chorus]\n快乐每一天"
 )
 print(f"音乐已生成: {audio}")
 
+# 高级音乐生成（music-2.0新功能）
+高质量_audio = client.music(
+    "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆",
+    "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫",
+    aigc_watermark=True,
+    sample_rate=44100,
+    bitrate=256000,
+    format="wav",
+    output_format="url"
+)
+
+# 流式音乐生成
+流式音频 = client.music(
+    "电子音乐,未来感,科技,节奏感强",
+    "未来世界正在到来\n代码与梦想交织\n[Chorus]\n创造新纪元",
+    stream=True,
+    output_format="hex",
+    sample_rate=32000,
+    format="mp3"
+)
+
 # 生成播客
 podcast = client.podcast("人工智能如何改变未来")
 print(f"播客已生成: {podcast}")
+
+# 首尾帧视频生成
+task_id = client.start_end_to_video(
+    first_frame_image="start.jpg",
+    last_frame_image="end.jpg",
+    duration=6,
+    resolution="768P"
+)
+print(f"首尾帧视频已生成: {task_id}")
+
+# 主体参考视频生成
+task_id = client.subject_reference_to_video(
+    subject_image="person.jpg",
+    prompt="A girl runs toward the camera and winks with a smile",
+    prompt_optimizer=True,
+    aigc_watermark=False
+)
+print(f"主体参考视频已生成: {task_id}")
 ```
 
 ## 🔧 技术特性

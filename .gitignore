@@ -192,3 +192,6 @@ backup/
 # 运行时文件
 *.pid
 *.lock
+
+# Claude Code 配置和缓存
+.claude/

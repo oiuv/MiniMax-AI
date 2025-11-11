@@ -1,207 +1,156 @@
 # CLAUDE.md
 
-该文件为Claude Code (claude.ai/code) 提供本仓库的开发指导。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 🚀 快速命令
+## 🚀 Quick Start Commands
 
-### 环境准备
+### Environment Setup
 ```bash
-# 一键安装依赖
+# Install dependencies
 python setup.py
 
-# 交互模式启动（推荐）
+# Interactive mode (recommended)
 python minimax_cli.py --interactive
 
-# 直接功能调用
-python minimax_cli.py --chat "你好，MiniMax！"
-python minimax_cli.py --image "月光下跳舞的猫，水墨画风格"
-python minimax_cli.py --video "竹林中散步的熊猫，卡通风格"
-python minimax_cli.py --music "春天的歌"
-python minimax_cli.py --clone
-
-# Windows用户一键启动
-python start.bat
+# Quick CLI commands
+python minimax_cli.py --chat "Hello, MiniMax!"
+python minimax_cli.py --list-files  # Test file management
+python minimax_cli.py -t "Hello world"  # Test TTS
 ```
 
-### 环境配置
-- **API密钥**: `~/.minimax_env` 存储Group ID和API Key
-- **自定义配置**: `~/.minimax_config` JSON格式配置文件
-- **输出目录**: `~/minimax_outputs/` 自动生成分类文件夹
+### Configuration
+- **API Keys**: Stored in `~/.minimax_ai/config.json` via interactive setup
+- **Environment Variables**: `MINIMAX_GROUP_ID`, `MINIMAX_API_KEY`
+- **Output Directory**: `~/minimax_outputs/` with auto-categorized subdirectories
 
-## 🏗️ 架构概览
+## 🏗️ Architecture Overview
 
-### 核心模块
-- **minimax_cli.py**: 统一CLI主程序，集成所有AI功能
-- **MiniMaxClient**: 中央API客户端，处理认证、请求和错误
-- **Legacy scripts**: 独立功能脚本（备份和调试用途）
+### Core Structure
+- **minimax_cli.py**: Single-file CLI application containing all functionality (~2400 lines)
+- **MiniMaxClient**: Central API client class with unified request handling
+- **ArgumentParser**: CLI interface with comprehensive parameter groups
+- **File Management**: Automatic output organization in `~/minimax_outputs/`
 
-### MiniMaxClient核心能力
-- **认证管理**: 环境变量自动配置，首次使用引导设置
-- **统一请求**: `_make_request()` 方法标准化所有API调用
-- **错误处理**: 友好的错误提示和重试机制
-- **流式支持**: 支持流式和非流式响应
+### Key Design Patterns
+- **Unified API Client**: All MiniMax API calls go through `_request()` method
+- **Smart Parameter Resolution**: Automatic model-specific parameter validation
+- **Progressive Enhancement**: Fallback handling for different API response formats
+- **Interactive Setup**: First-run configuration wizard for API credentials
 
-## 🔗 核心接口文档
+### Request Handling Architecture
+```python
+# Central request pattern
+def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+    # URL construction with GroupId for specific endpoints
+    # Bearer token authentication
+    # 3-retry mechanism with exponential backoff
+    # base_resp status code validation
+```
 
-### 1. 文本生成（聊天）
-- **接口地址**: https://platform.minimaxi.com/document/对话?key=66701d281d57f38758d581d0
-- **接口地址**: https://api.minimaxi.com/v1/text/chatcompletion_v2
-- **认证方式**: Bearer Token (MINIMAX_API_KEY)
-- **模型列表**:
-  - **MiniMax-M1**: 全球领先，80K思维链 × 1M输入
-  - **MiniMax-Text-01**: 全新架构，支持1M超长上下文
+## 🎯 Core MiniMax APIs
 
-### 2. 语音合成
-- **同步接口**: https://api.minimaxi.com/v1/t2a_v2?GroupId={YOUR_GROUP_ID}
-- **异步接口**: https://api.minimaxi.com/v1/t2a_async_v2?GroupId={YOUR_GROUP_ID}
-- **最新模型** (2025年8月6日发布):
-  - **speech-2.5-hd-preview**: 极致相似度，韵律表现出色
-  - **speech-2.5-turbo-preview**: 支持40个语种
-  - **speech-02-hd**: 出色韵律和稳定性
-  - **speech-02-turbo**: 小语种能力增强
-  - **speech-01-hd**: 超高复刻相似度
-  - **speech-01-turbo**: 快速生成
+### API Endpoint Patterns
+- **Base URL**: `https://api.minimaxi.com/v1`
+- **Authentication**: Bearer token + GroupId query parameter for specific endpoints
+- **Response Format**: JSON with `base_resp` wrapper containing status codes
 
-### 测试规范（必须遵守）
-**测试流程：**
-1. **用户运行测试**：所有测试必须由用户在真实环境中运行
-2. **结果确认**：测试后必须提供明确的成功/失败结果
-3. **直接反馈**：不创建无意义的测试脚本
+### Key Model Families
+- **Text**: MiniMax-M2 (default), MiniMax-Text-01
+- **Speech**: speech-2.6-hd (latest), speech-02 series, speech-01 series
+- **Video**: MiniMax-Hailuo-2.3, T2V-01-Director, I2V-01 series
+- **Image**: image-01, image-01-live (with styles)
+- **Music**: music-2.0 (with streaming)
+- **Files**: Upload/list/retrieve/delete management system
 
-**播客功能测试步骤：**
+### Implementation Critical Points
+- **GroupId Handling**: Required for TTS, voice cloning, music generation endpoints
+- **Camera Controls**: Video generation supports 15 movement directives in prompt text
+- **Resolution Validation**: Different video models support different resolution sets
+- **File Purpose Validation**: Strict validation for upload/delete operations
+
+## 🛠️ Development Commands
+
+### Dependencies
 ```bash
-# 测试1：基础播客生成
-python minimax_cli.py --podcast "AI如何改变未来工作方式"
-
-# 测试2：指定场景和音色
-python minimax_cli.py --podcast "科技热点" --scene dialogue --voice male-qn-jingying --voice female-yujie
-
-# 测试3：交互式播客生成
-python minimax_cli.py --interactive  # 选择电台播客功能
+# Install requirements
+pip install -r requirements.txt
+# Core dependency: requests>=2.28.0
 ```
 
-**预期结果：**
-- 成功：播客文件保存在 `./podcasts/` 目录
-- 失败：提供具体错误信息
-
-### 3. 语音克隆
-- **快速复刻**: https://api.minimaxi.com/v1/voice_clone
-- **音色设计**: https://api.minimaxi.com/v1/voice_design
-
-### 4. 视频生成
-- **视频生成**: https://api.minimaxi.com/v1/video_generation
-- **视频生成Agent**: https://api.minimaxi.com/v1/video_template_generation
-- **模型列表**:
-  - **MiniMax-Hailuo-02**: 1080P超清，10秒视频
-  - **T2V-01-Director**: 文生视频导演版
-  - **I2V-01-Director**: 图生视频导演版
-  - **I2V-01-live**: 卡通/漫画风格增强
-  - **S2V-01**: 主体参考视频生成
-
-### 5. 音乐生成
-- **接口地址**: https://api.minimaxi.com/v1/music_generation
-- **支持模型**: music-1.5, music-01
-
-### 6. 图像生成
-- **接口地址**: https://api.minimaxi.com/v1/image_generation
-- **支持模型**: image-01, image-01-live
-
-### 7. 文件管理
-- **上传接口**: https://api.minimaxi.com/v1/files/upload
-- **列出接口**: https://api.minimaxi.com/v1/files/list
-- **检索接口**: https://api.minimaxi.com/v1/files/retrieve
-- **删除接口**: https://api.minimaxi.com/v1/files/delete
-- **下载接口**: https://api.minimaxi.com/v1/files/retrieve_content
-
-## 📦 依赖配置
-
-### 核心依赖
-```
-requests>=2.28.0      # HTTP客户端
-inquirer>=3.1.0       # 交互式提示
-rich>=13.0.0          # 终端UI/UX增强
-openai>=1.0.0         # OpenAI兼容API
-```
-
-### 环境变量
+### Testing Patterns
 ```bash
-export MINIMAX_GROUP_ID="your_group_id"
-export MINIMAX_API_KEY="your_api_key"
+# API connectivity test
+python minimax_cli.py --list-files  # Tests auth + file API
+
+# Feature-specific tests
+python minimax_cli.py -t "test"  # TTS test
+python minimax_cli.py --chat "hello"  # Chat test
 ```
 
-## 🗂️ 项目结构
+### Debugging
+- **Log Level**: Built-in request/response logging
+- **Error Handling**: All API calls return structured error responses
+- **Configuration**: Interactive setup for first-time users
 
-```
-MiniMax-AI/
-├── minimax_cli.py          # 统一CLI主程序
-├── setup.py               # 一键安装脚本
-├── requirements.txt       # 依赖列表
-├── start.bat             # Windows一键启动
-├── CLAUDE.md             # 本开发指导文档
-├── QWEN.md               # 产品需求文档
-├── README.md             # 用户说明文档
-└── legacy/               # 原始独立脚本
-    ├── minimax_*.py      # 各功能独立实现
-    └── ...
-```
+## 📁 Key Implementation Files
 
-## 🔧 开发最佳实践
+### Single-File Architecture
+- **minimax_cli.py**: Complete CLI application (~2400 lines)
+  - MiniMaxClient class with all API methods
+  - ArgumentParser with comprehensive CLI groups
+  - File management and output handling
+  - Interactive mode implementation
 
-### 代码风格
-- **模块化**: 按功能模块组织代码
-- **错误处理**: 用户友好的错误提示
-- **配置管理**: 环境变量 + JSON配置文件
-- **日志管理**: 详细的操作日志和错误日志
+### Method Organization (in order of appearance)
+```python
+# Core infrastructure
+class MiniMaxClient:
+    def __init__(self)           # Setup and auth
+    def _request()              # Unified API caller
+    def _setup_credentials()    # Interactive config
 
-### API集成模式
-- **统一封装**: 所有API调用通过MiniMaxClient
-- **参数验证**: 输入参数合法性检查
-- **重试机制**: 网络异常自动重试
-- **结果缓存**: 合理缓存API响应
+# AI Generation methods
+    def chat()                  # Text generation (MiniMax-M2)
+    def tts()                   # Text-to-speech (speech-2.6-hd)
+    def image()                 # Image generation (image-01)
+    def video()                 # Video generation (Hailuo-2.3)
+    def music()                 # Music generation (music-2.0)
 
-### 用户体验
-- **交互模式**: 彩色界面 + 进度条
-- **命令模式**: 简洁的参数解析
-- **文件管理**: 自动生成分类目录
-- **进度反馈**: 实时状态更新
+# File Management (complete CRUD)
+    def upload_file()           # Upload with multipart
+    def list_files()            # List with pagination
+    def retrieve_file()         # Get file details
+    def download_file()         # Download binary content
+    def delete_file()           # Delete with purpose validation
 
-## 📝 调试技巧
-
-### 快速测试
-```bash
-# 测试API连接
-python -c "from minimax_cli import MiniMaxClient; c=MiniMaxClient(); print('✅ API正常')"
-
-# 测试特定功能
-python minimax_cli.py --chat "测试连接" --model MiniMax-Text-01
+# Utility methods
+    def list_voices()           # Voice catalog
+    def podcast()               # Multi-voice generation
 ```
 
-### 日志查看
-- **操作日志**: `~/minimax_outputs/logs/`
-- **错误日志**: 控制台实时显示 + 文件保存
-- **调试模式**: 添加 `--debug` 参数获取详细日志
+## 🎯 Implementation Notes
 
-## 🔄 版本管理
-- **当前版本**: v2.1.0 (支持Speech 2.5模型)
-- **最后更新**: 2025年8月15日
-- **发布日期**: 2025年8月6日 (Speech 2.5模型支持)
+### Critical Implementation Details
+- **Response Format Flexibility**: Handles both `data` and `files` keys in API responses
+- **Smart Parameter Resolution**: Model-specific parameter validation
+- **Base64 Image Processing**: Automatic local file encoding for image inputs
+- **File Purpose Validation**: Strict enums for file operations
+- **Camera Movement Parsing**: Text-based video direction controls
 
-## 📋 诚实行为准则
+### CLI Architecture
+- **Argument Groups**: Organized by function type (text, image, video, music, files)
+- **Help System**: Comprehensive help for all parameters
+- **Output Management**: Automatic file organization in categorized directories
 
-### 行为承诺
-1. **代码验证承诺** - 所有功能声明前必须执行grep验证
-2. **状态明确承诺** - 所有回答必须明确区分"已实现"vs"待实现"
-3. **操作验证承诺** - 所有文件修改操作必须实际执行后再声明完成
-4. **质疑响应承诺** - 用户质疑时必须立即停止并执行代码验证
+### Error Handling Patterns
+```python
+# Standard API response validation
+if 'base_resp' in result and result['base_resp']['status_code'] != 0:
+    raise Exception(f"API错误: {result['base_resp']['status_msg']}")
 
-### 行为规则
-- 每段代码回答前：执行`grep -n "功能关键词" minimax_cli.py`
-- 每段文件操作后：执行`ls -la`确认操作完成
-- 每段状态声明：必须附带可执行的验证命令
-- 每段虚假声明：立即执行`git diff`查看实际变更
-
-### 行为保证
-- 不声称已实现未验证的功能
-- 不声称已修改未执行的文件操作
-- 不混淆文档描述与代码实现
-- 不接受任何未经代码验证的功能声明
+# File operation fallbacks
+if 'data' in result and isinstance(result['data'], list):
+    files = result['data']
+elif 'files' in result and isinstance(result['files'], list):
+    files = result['files']
+```
