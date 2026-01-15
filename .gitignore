@@ -195,3 +195,7 @@ backup/
 
 # Claude Code 配置和缓存
 .claude/
+
+# 临时文件
+tmpclaude*/
+tmp*
