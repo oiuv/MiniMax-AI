@@ -1553,15 +1553,14 @@ class MiniMaxClient:
             except Exception:
                 pass
         
-        # API支持的参数映射
+        # API支持的参数映射（根据官方文档）
         valid_types = {
             'system': 'system',
             'cloning': 'voice_cloning',
             'generation': 'voice_generation',
-            'music': 'music_generation',
             'all': 'all'
         }
-        
+
         # 使用有效的API参数
         api_param = valid_types.get(voice_type, 'all')
         
@@ -1860,8 +1859,8 @@ def main():
     voice_group = parser.add_argument_group('音色管理')
     voice_group.add_argument('--voice', type=str, default="female-shaonv",
                             help='指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)')
-    voice_group.add_argument('-l', '--list-voices', choices=['system', 'cloning', 'generation', 'music', 'all'], 
-                            help='查询可用音色列表')
+    voice_group.add_argument('-l', '--list-voices', choices=['system', 'cloning', 'generation', 'all'],
+                            help='查询可用音色列表 (system:系统音色, cloning:快速复刻, generation:文生音色, all:全部)')
     voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
     voice_group.add_argument('-f', '--filter-voices', type=str, help='过滤音色列表关键词')
 
