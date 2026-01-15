@@ -108,18 +108,132 @@ class MiniMaxClient:
                 self._log(f"🔄 重试第{attempt+1}次...", "WARN")
                 time.sleep(1)
     
-    def chat(self, message: str, model: str = "MiniMax-M2") -> str:
-        """智能对话"""
-        self._log("🤖 开始生成对话内容...")
-        data = {
-            "model": model,
-            "messages": [{"role": "user", "content": message}],
-            "max_tokens": 1024
+    def chat(self, message: str, model: str = "MiniMax-M2.1",
+             system_prompt: str = None, temperature: float = 1.0,
+             max_tokens: int = 1024, stream: bool = False,
+             use_anthropic_api: bool = False, show_thinking: bool = False) -> str:
+        """智能对话（支持 MiniMax-M2.1 和 Anthropic API 兼容接口）
+
+        Args:
+            message: 用户消息内容
+            model: 模型名称，可选值：MiniMax-M2.1, MiniMax-M2.1-lightning, MiniMax-M2
+            system_prompt: 系统提示词
+            temperature: 温度参数 (0.0, 1.0]，推荐 1.0
+            max_tokens: 最大生成 token 数
+            stream: 是否使用流式响应
+            use_anthropic_api: 是否使用 Anthropic API 兼容接口
+            show_thinking: 是否显示思考过程（仅 Anthropic API 支持）
+
+        Returns:
+            模型响应文本，如果 show_thinking=True 则返回包含思考过程的字典
+        """
+        # 模型映射：默认使用最新模型
+        model_mapping = {
+            "MiniMax-M2.1": "MiniMax-M2.1",
+            "MiniMax-M2.1-lightning": "MiniMax-M2.1-lightning",
+            "MiniMax-M2": "MiniMax-M2",
+            "M2.1": "MiniMax-M2.1",
+            "M2.1-lightning": "MiniMax-M2.1-lightning",
+            "M2": "MiniMax-M2"
         }
-        response = self._request("POST", "text/chatcompletion_v2", json=data)
-        content = response['choices'][0]['message']['content']
-        self._log(f"📄 生成内容长度: {len(content)} 字符")
-        return content
+        model = model_mapping.get(model, model)
+
+        # 选择 API 端点
+        if use_anthropic_api:
+            endpoint = "anthropic/v1/messages"
+            base_url = "https://api.minimaxi.com/anthropic"
+            self._log(f"🤖 使用 Anthropic API 兼容接口 (模型: {model})")
+        else:
+            endpoint = "text/chatcompletion_v2"
+            base_url = self.base_url
+            self._log(f"🤖 使用标准 MiniMax API (模型: {model})")
+
+        # 构建请求数据
+        if use_anthropic_api:
+            # Anthropic API 格式
+            messages = [{"role": "user", "content": [{"type": "text", "text": message}]}]
+            data = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens
+            }
+            if system_prompt:
+                data["system"] = system_prompt
+            if temperature is not None:
+                if temperature <= 0 or temperature > 1:
+                    raise ValueError(f"temperature 必须在 (0.0, 1.0] 范围内，当前为 {temperature}")
+                data["temperature"] = temperature
+            if stream:
+                data["stream"] = True
+        else:
+            # 标准 MiniMax API 格式
+            messages = [{"role": "user", "content": message}]
+            data = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens
+            }
+            if system_prompt:
+                # 标准 API 将 system prompt 作为第一条消息
+                messages.insert(0, {"role": "system", "content": system_prompt})
+            if temperature is not None:
+                data["temperature"] = temperature
+            if stream:
+                data["stream"] = True
+
+        # 发送请求
+        if use_anthropic_api:
+            # 使用自定义 base_url
+            original_base_url = self.base_url
+            self.base_url = base_url
+            try:
+                response = self._request("POST", endpoint, json=data)
+            finally:
+                self.base_url = original_base_url
+        else:
+            response = self._request("POST", endpoint, json=data)
+
+        # 解析响应
+        if use_anthropic_api:
+            return self._parse_anthropic_response(response, show_thinking)
+        else:
+            content = response['choices'][0]['message']['content']
+            self._log(f"📄 生成内容长度: {len(content)} 字符")
+            return content
+
+    def _parse_anthropic_response(self, response: dict, show_thinking: bool = False) -> str | dict:
+        """解析 Anthropic API 格式的响应
+
+        Args:
+            response: API 响应数据
+            show_thinking: 是否显示思考过程
+
+        Returns:
+            文本内容或包含思考过程的字典
+        """
+        # Anthropic API 格式：response.content 是一个列表
+        if "content" not in response:
+            raise ValueError("无效的 API 响应格式：缺少 content 字段")
+
+        content_blocks = response["content"]
+        thinking_text = ""
+        response_text = ""
+
+        for block in content_blocks:
+            if block.get("type") == "thinking":
+                thinking_text = block.get("thinking", "")
+            elif block.get("type") == "text":
+                response_text = block.get("text", "")
+
+        if show_thinking:
+            return {
+                "thinking": thinking_text,
+                "content": response_text,
+                "full_response": content_blocks
+            }
+        else:
+            self._log(f"📄 生成内容长度: {len(response_text)} 字符")
+            return response_text
     
     def image(self, prompt: str, model: str = "image-01", n: int = 1,
                 aspect_ratio: str = "1:1", width: int = None, height: int = None,
@@ -1176,17 +1290,22 @@ class MiniMaxClient:
             self._log(error_msg)
             return {'error': error_msg}
 
-    def tts(self, text: str, voice_id: str = "female-chengshu", emotion: str = "calm",
+    def tts(self, text: str, voice_id: str = "female-chengshu", emotion: str = None,
+               model: str = "speech-2.6-hd",
                speed: float = 1.0, vol: float = 1.0, pitch: int = 0,
                sample_rate: int = 32000, format: str = "mp3", bitrate: int = 128000,
                channel: int = 1, stream: bool = False, language_boost: str = None,
-               subtitle_enable: bool = False, output_format: str = "hex") -> str:
-        """文本转语音，支持完整的高级参数控制
+               subtitle_enable: bool = False, output_format: str = "hex",
+               text_normalization: bool = False, latex_read: bool = False,
+               force_cbr: bool = False) -> str:
+        """文本转语音（支持最新6个模型和完整参数）
 
         Args:
             text: 需要合成语音的文本 (< 10000字符)
             voice_id: 音色ID (支持300+系统音色)
-            emotion: 情感控制 [happy, sad, angry, fearful, disgusted, surprised, calm, fluent]
+            model: 语音模型 [speech-2.6-hd, speech-2.6-turbo, speech-02-hd, speech-02-turbo, speech-01-hd, speech-01-turbo]
+            emotion: 情感控制 [happy, sad, angry, fearful, disgusted, surprised, calm, fluent, whisper]
+                    fluent/whisper 仅对 speech-2.6-hd/speech-2.6-turbo 生效
             speed: 语速 [0.5, 2.0]，默认1.0
             vol: 音量 (0, 10]，默认1.0
             pitch: 语调 [-12, 12]，默认0
@@ -1196,13 +1315,22 @@ class MiniMaxClient:
             channel: 声道数 [1,2]，默认1
             stream: 是否流式输出，默认False
             language_boost: 语言增强 [Chinese, English, auto, 等40种语言]
-            subtitle_enable: 是否启用字幕，默认False
-            output_format: 输出格式 [url, hex]，默认hex
+            subtitle_enable: 是否启用字幕（仅非流式），默认False
+            output_format: 输出格式 [url, hex]，流式仅支持hex
+            text_normalization: 是否启用文本规范化，默认False
+            latex_read: 是否朗读latex公式（需用$包裹），默认False
+            force_cbr: 是否使用恒定比特率（仅流式+mp3生效），默认False
 
         Returns:
             音频数据URL或hex编码
         """
-        self._log("🎤 开始语音合成...")
+        self._log(f"🎤 开始语音合成 (模型: {model})...")
+
+        # 模型验证
+        valid_models = ["speech-2.6-hd", "speech-2.6-turbo", "speech-02-hd",
+                       "speech-02-turbo", "speech-01-hd", "speech-01-turbo"]
+        if model not in valid_models:
+            raise ValueError(f"模型必须是{valid_models}之一")
 
         # 参数验证
         if len(text) > 10000:
@@ -1224,18 +1352,40 @@ class MiniMaxClient:
         if channel not in [1, 2]:
             raise ValueError("声道数必须是1或2")
 
+        # 情感验证（仅在指定 emotion 时验证）
+        if emotion is not None:
+            valid_emotions = ["happy", "sad", "angry", "fearful", "disgusted",
+                             "surprised", "calm", "fluent", "whisper"]
+            if emotion not in valid_emotions:
+                raise ValueError(f"情感必须是{valid_emotions}之一")
+
+            # fluent/whisper 仅对特定模型生效
+            if emotion in ["fluent", "whisper"] and model not in ["speech-2.6-hd", "speech-2.6-turbo"]:
+                self._log(f"⚠️ {emotion}情感仅对 speech-2.6-hd/speech-2.6-turbo 生效", "WARN")
+
+        # output_format 验证
+        if stream and output_format == "url":
+            raise ValueError("流式输出仅支持hex格式")
+
         # 构建请求数据
+        voice_settings = {
+            "voice_id": voice_id,
+            "speed": speed,
+            "vol": vol,
+            "pitch": pitch,
+            "text_normalization": text_normalization,
+            "latex_read": latex_read
+        }
+
+        # 仅在明确指定 emotion 时才添加（让模型自动匹配）
+        if emotion is not None:
+            voice_settings["emotion"] = emotion
+
         data = {
-            "model": "speech-2.6-hd",
+            "model": model,
             "text": text,
             "stream": stream,
-            "voice_setting": {
-                "voice_id": voice_id,
-                "emotion": emotion,
-                "speed": speed,
-                "vol": vol,
-                "pitch": pitch
-            },
+            "voice_setting": voice_settings,
             "audio_setting": {
                 "sample_rate": sample_rate,
                 "format": format,
@@ -1254,6 +1404,9 @@ class MiniMaxClient:
             data["stream_options"] = {
                 "exclude_aggregated_audio": False
             }
+            # force_cbr 仅在流式+mp3时生效
+            if format == "mp3" and force_cbr:
+                data["audio_setting"]["force_cbr"] = True
 
         response = self._request("POST", "t2a_v2", json=data)
 
@@ -1264,8 +1417,13 @@ class MiniMaxClient:
             # TODO: 实现流式音频合并
             return response.get('data', {}).get('audio', '')
         else:
-            audio_url = response.get('data', {}).get('audio', '')
+            audio_data = response.get('data', {}).get('audio', '')
+            subtitle_file = response.get('data', {}).get('subtitle_file', '')
             self._log("🗣️ 语音合成完成")
+
+            # 显示字幕信息
+            if subtitle_file:
+                self._log(f"📝 字幕文件: {subtitle_file}")
 
             # 显示音频信息
             extra_info = response.get('extra_info', {})
@@ -1274,7 +1432,7 @@ class MiniMaxClient:
                          f"大小{extra_info.get('audio_size', 0)//1024}KB, "
                          f"字数{extra_info.get('word_count', 0)}")
 
-            return audio_url
+            return audio_data
 
     def tts_advanced(self, text: str, voice_id: str = "female-chengshu",
                            pronunciation_dict: dict = None,
@@ -1658,6 +1816,22 @@ def main():
     generate_group.add_argument('-m', '--music', metavar='音乐描述', help='AI音乐生成')
     generate_group.add_argument('-t', '--tts', metavar='语音文本', help='文本转语音')
     generate_group.add_argument('-p', '--podcast', metavar='播客主题', help='AI播客生成')
+
+    # 🤖 对话选项
+    chat_group = parser.add_argument_group('对话选项')
+    chat_group.add_argument('--chat-model', default='MiniMax-M2.1',
+                           choices=['MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2',
+                                   'M2.1', 'M2.1-lightning', 'M2'],
+                           help='对话模型，默认MiniMax-M2.1')
+    chat_group.add_argument('--system-prompt', type=str, help='系统提示词')
+    chat_group.add_argument('--temperature', type=float, default=1.0,
+                           help='温度参数 (0.0-1.0]，默认1.0')
+    chat_group.add_argument('--max-tokens', type=int, default=1024,
+                           help='最大生成token数，默认1024')
+    chat_group.add_argument('--anthropic-api', action='store_true',
+                           help='使用 Anthropic API 兼容接口')
+    chat_group.add_argument('--show-thinking', action='store_true',
+                           help='显示模型思考过程（仅 Anthropic API 支持）')
     
     # 🎨 图像生成选项
     image_group = parser.add_argument_group('图像生成选项')
@@ -1684,8 +1858,8 @@ def main():
     
     # 🎭 音色管理
     voice_group = parser.add_argument_group('音色管理')
-    voice_group.add_argument('--voice', type=str, default="female-chengshu", 
-                            help='指定音色ID (如: male-qn-jingying, female-yujie)')
+    voice_group.add_argument('--voice', type=str, default="female-shaonv",
+                            help='指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)')
     voice_group.add_argument('-l', '--list-voices', choices=['system', 'cloning', 'generation', 'music', 'all'], 
                             help='查询可用音色列表')
     voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
@@ -1718,9 +1892,14 @@ def main():
 
     # 🎤 语音合成高级选项
     tts_group = parser.add_argument_group('语音合成选项')
-    tts_group.add_argument('--emotion', default='calm',
-                          choices=['happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'calm', 'fluent'],
-                          help='语音情感控制，默认calm')
+    tts_group.add_argument('--tts-model', default='speech-2.6-hd',
+                          choices=['speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd',
+                                  'speech-02-turbo', 'speech-01-hd', 'speech-01-turbo'],
+                          help='语音合成模型，默认speech-2.6-hd')
+    tts_group.add_argument('--emotion', default=None,
+                          choices=['happy', 'sad', 'angry', 'fearful', 'disgusted',
+                                  'surprised', 'calm', 'fluent', 'whisper'],
+                          help='语音情感控制（默认不指定，让模型自动匹配）')
     tts_group.add_argument('--speed', type=float, default=1.0, help='语速 (0.5-2.0)，默认1.0')
     tts_group.add_argument('--vol', type=float, default=1.0, help='音量 (0.1-10.0)，默认1.0')
     tts_group.add_argument('--pitch', type=int, default=0, help='语调 (-12到12)，默认0')
@@ -1729,15 +1908,22 @@ def main():
                           help='采样率，默认32000')
     tts_group.add_argument('--format', default='mp3',
                           choices=['mp3', 'pcm', 'flac', 'wav'],
-                          help='音频格式，默认mp3')
+                          help='音频格式，默认mp3 (wav仅非流式)')
     tts_group.add_argument('--bitrate', type=int, default=128000,
                           choices=[32000, 64000, 128000, 256000],
                           help='比特率，默认128000')
     tts_group.add_argument('--channel', type=int, default=1, choices=[1, 2], help='声道数，默认1')
     tts_group.add_argument('--stream', action='store_true', help='启用流式输出')
-    tts_group.add_argument('--language-boost', help='语言增强 (Chinese, English, auto等)')
-    tts_group.add_argument('--subtitle', action='store_true', help='启用字幕生成')
-    tts_group.add_argument('--output-format', default='hex', choices=['hex', 'url'], help='输出格式，默认hex')
+    tts_group.add_argument('--language-boost', help='语言增强 (Chinese, English, auto等40种语言)')
+    tts_group.add_argument('--subtitle', action='store_true', help='启用字幕生成（仅非流式）')
+    tts_group.add_argument('--output-format', default='hex', choices=['hex', 'url'],
+                          help='输出格式，默认hex (流式仅支持hex)')
+    tts_group.add_argument('--text-normalization', action='store_true',
+                          help='启用文本规范化（提升数字阅读性能）')
+    tts_group.add_argument('--latex-read', action='store_true',
+                          help='启用LaTeX公式朗读（公式需用$包裹）')
+    tts_group.add_argument('--force-cbr', action='store_true',
+                          help='使用恒定比特率（仅流式+mp3生效）')
     
     # 📺 视频管理
     video_group = parser.add_argument_group('视频管理')
@@ -1867,7 +2053,26 @@ def main():
         if content.endswith(('.txt', '.md')) and Path(content).exists():
             with open(content, 'r', encoding='utf-8') as f:
                 content = f.read()
-        print(client.chat(content))
+
+        # 调用更新后的 chat 方法
+        response = client.chat(
+            message=content,
+            model=args.chat_model,
+            system_prompt=args.system_prompt,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            use_anthropic_api=args.anthropic_api,
+            show_thinking=args.show_thinking
+        )
+
+        # 显示响应
+        if args.show_thinking and isinstance(response, dict):
+            print("=== 🧠 思考过程 ===")
+            print(response.get('thinking', ''))
+            print("\n=== 📝 回复内容 ===")
+            print(response.get('content', ''))
+        else:
+            print(response)
     elif args.image_to_image:
         # 图生图处理
         reference_image, prompt = args.image_to_image
@@ -2169,10 +2374,11 @@ def main():
             with open(text, 'r', encoding='utf-8') as f:
                 text = f.read()
 
-        # 使用新的高级TTS参数
+        # 使用更新后的TTS参数
         audio = client.tts(
             text=text,
             voice_id=args.voice,
+            model=args.tts_model,
             emotion=args.emotion,
             speed=args.speed,
             vol=args.vol,
@@ -2184,7 +2390,10 @@ def main():
             stream=args.stream,
             language_boost=args.language_boost,
             subtitle_enable=args.subtitle,
-            output_format=args.output_format
+            output_format=args.output_format,
+            text_normalization=args.text_normalization,
+            latex_read=args.latex_read,
+            force_cbr=args.force_cbr
         )
 
         if audio:

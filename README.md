@@ -22,10 +22,24 @@ python minimax_cli.py --interactive
 
 #### 命令行模式
 ```bash
-# 智能对话
+# ========== 智能对话（支持最新 MiniMax-M2.1 系列）==========
+# 基础对话（默认使用 MiniMax-M2.1 模型）
 python minimax_cli.py -c "你好，MiniMax"
 
-# 图像生成（支持高级参数）
+# 高级对话 - 使用 Anthropic API 兼容接口
+python minimax_cli.py -c "解释量子计算" --anthropic-api --show-thinking
+
+# 自定义系统提示词和温度
+python minimax_cli.py -c "写一首关于春天的诗" \
+    --chat-model MiniMax-M2.1 \
+    --system-prompt "你是一位专业的诗人" \
+    --temperature 0.9 \
+    --max-tokens 2048
+
+# 使用极速模型
+python minimax_cli.py -c "快速回答: 1+1等于几?" --chat-model M2.1-lightning
+
+# ========== 图像生成（支持高级参数）==========
 python minimax_cli.py -i "樱花树下的猫" --n 2 --aspect-ratio 16:9
 
 # 高级图像生成（新模型支持）
@@ -82,12 +96,16 @@ python minimax_cli.py -m "摇滚音乐,激情,充满力量" --lyrics "[verse]\n�
 # 流式传输（hex格式）
 python minimax_cli.py -m "电子音乐,未来感,科技" --lyrics "未来世界\n代码与梦想" --music-stream
 
-# 文本转语音（支持高级参数）
-python minimax_cli.py -t "你好，世界" --voice female-chengshu --emotion happy --speed 1.2
+# 文本转语音（支持6个最新模型）
+python minimax_cli.py -t "你好，世界" --tts-model speech-2.6-hd --emotion happy --speed 1.2
 # 高级语音合成
 python minimax_cli.py -t "你好，世界" --format wav --sample-rate 44100 --channel 2
 # 流式语音合成
-python minimax_cli.py -t "你好，世界" --stream --output-format url
+python minimax_cli.py -t "你好，世界" --stream --output-format hex
+# 文本规范化+LaTeX公式
+python minimax_cli.py -t "公式：$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$" --latex-read --text-normalization
+# 使用fluent/whisper情感（仅2.6模型）
+python minimax_cli.py -t "生动讲述一个故事" --tts-model speech-2.6-hd --emotion fluent
 
 # AI播客生成
 python minimax_cli.py -p "人工智能如何改变未来"
@@ -100,7 +118,7 @@ python minimax_cli.py --list-voices
 
 | 功能 | 模型 | 描述 |
 |---|---|---|
-| **智能对话** | MiniMax-M2 | 支持超长上下文，Interleaved Thinking，Tool Use能力 |
+| **智能对话** | MiniMax-M2.1系列 | 最新M2.1/M2.1-lightning，支持Anthropic API，思维链可视化 |
 | **图像生成** | image-01系列 | 支持1-9张图片，多种宽高比，风格控制 |
 | **图生图** | image-01系列 | 基于参考图片生成，支持人像character类型 |
 | **视频生成** | MiniMax-Hailuo-2.3 | 肢体动作、物理表现与指令遵循能力全面升级 |
@@ -108,7 +126,7 @@ python minimax_cli.py --list-voices
 | **首尾帧生成** | MiniMax-Hailuo-02 | 起始到结束图片的过渡动画，高清输出 |
 | **主体参考生成** | S2V-01 | 基于人物主体图片生成视频，保持面部特征 |
 | **音乐创作** | music-2.0 | 自定义歌词，支持流式传输和多种音频格式 |
-| **语音合成** | speech-2.6-hd | 300+音色，情感控制，40种语言支持 |
+| **语音合成** | speech-2.6系列 | 支持6个模型，9种情感，文本规范化，LaTeX朗读 |
 | **AI播客** | 多模型组合 | 多人对话，多音色播客 |
 | **语音克隆** | voice_clone | 3秒快速克隆音色 |
 
@@ -132,23 +150,86 @@ python minimax_cli.py --list-voices
 
 ## 🎯 高级功能
 
-### 语音合成参数
+### 智能对话参数（支持 MiniMax-M2.1 系列）
+```bash
+python minimax_cli.py -c "对话内容" \
+    --chat-model MiniMax-M2.1 \        # 对话模型 [MiniMax-M2.1, MiniMax-M2.1-lightning, MiniMax-M2]
+    --system-prompt "你是一个助手" \  # 系统提示词
+    --temperature 0.8 \                # 温度参数 (0.0-1.0]，默认1.0
+    --max-tokens 2048 \                # 最大生成token数，默认1024
+    --anthropic-api \                  # 使用 Anthropic API 兼容接口
+    --show-thinking                    # 显示模型思考过程（仅 Anthropic API）
+
+# Anthropic API 兼容模式 - 查看思考过程
+python minimax_cli.py -c "解释量子纠缠原理" \
+    --anthropic-api \
+    --show-thinking \
+    --temperature 0.7
+
+# 使用极速模型 M2.1-lightning
+python minimax_cli.py -c "快速生成一份代码大纲" \
+    --chat-model M2.1-lightning \
+    --max-tokens 4096
+```
+
+### 对话模型特性
+| 模型 | 速度 | 特点 | 适用场景 |
+|------|------|------|----------|
+| **MiniMax-M2.1** | ~60 tps | 强大多语言能力，编程体验全面升级 | 编程、复杂任务 |
+| **MiniMax-M2.1-lightning** | ~100 tps | 极速响应，更敏捷 | 快速对话、实时应用 |
+| **MiniMax-M2** | 标准 | 为高效编码与Agent工作流而生 | 兼容性需求 |
+
+### Anthropic API 兼容性说明
+- **端点**: `https://api.minimaxi.com/anthropic`
+- **支持参数**: model, messages, max_tokens, stream, system, temperature, tool_choice, tools, top_p, thinking, metadata
+- **不支持参数**: top_k, stop_sequences, service_tier, mcp_servers, context_management, container
+- **消息类型支持**: text, tool_use, tool_result, thinking
+- **消息类型不支持**: image, document
+
+### 语音合成参数（支持6个模型）
 ```bash
 python minimax_cli.py -t "文本内容" \
-    --voice female-chengshu \  # 音色选择
-    --emotion happy \          # 情感控制 [happy, sad, angry, fearful, disgusted, surprised, calm, fluent]
-    --speed 1.2 \              # 语速 [0.5-2.0]
-    --vol 1.5 \                # 音量 [0.1-10.0]
-    --pitch 5 \                # 语调 [-12到12]
-    --format wav \             # 音频格式 [mp3, pcm, flac, wav]
-    --sample-rate 44100 \      # 采样率 [8000,16000,22050,24000,32000,44100]
-    --bitrate 256000 \         # 比特率 [32000,64000,128000,256000]
-    --channel 2 \              # 声道数 [1,2]
-    --stream \                 # 流式输出
-    --language-boost Chinese \ # 语言增强
-    --subtitle \               # 启用字幕
-    --output-format url        # 输出格式 [hex, url]
+    --tts-model speech-2.6-hd \     # 语音模型 [speech-2.6-hd, speech-2.6-turbo, speech-02-hd, speech-02-turbo, speech-01-hd, speech-01-turbo]
+    --voice female-chengshu \       # 音色选择（300+系统音色）
+    --emotion happy \               # 情感控制 [happy, sad, angry, fearful, disgusted, surprised, calm, fluent, whisper]
+                                    # fluent/whisper 仅对 speech-2.6-hd/speech-2.6-turbo 生效
+    --speed 1.2 \                   # 语速 [0.5-2.0]
+    --vol 1.5 \                     # 音量 (0, 10]
+    --pitch 5 \                     # 语调 [-12到12]
+    --format wav \                  # 音频格式 [mp3, pcm, flac, wav]，wav仅非流式
+    --sample-rate 44100 \           # 采样率 [8000,16000,22050,24000,32000,44100]
+    --bitrate 256000 \              # 比特率 [32000,64000,128000,256000]
+    --channel 2 \                   # 声道数 [1,2]
+    --stream \                      # 流式输出
+    --language-boost Chinese \      # 语言增强（40种语言）
+    --subtitle \                    # 启用字幕（仅非流式）
+    --output-format hex \           # 输出格式 [hex, url]，流式仅支持hex
+    --text-normalization \          # 启用文本规范化（提升数字阅读性能）
+    --latex-read \                  # 启用LaTeX公式朗读（公式需用$包裹）
+    --force-cbr                     # 使用恒定比特率（仅流式+mp3生效）
+
+# 使用最新模型
+python minimax_cli.py -t "你好世界" --tts-model speech-2.6-hd --emotion happy
+
+# 使用fluent情感（生动讲述）
+python minimax_cli.py -t "这是一个精彩的故事" --tts-model speech-2.6-hd --emotion fluent
+
+# LaTeX公式朗读
+python minimax_cli.py -t "公式是 $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$" --latex-read
+
+# 文本规范化（优化数字阅读）
+python minimax_cli.py -t "电话号码是13800138000" --text-normalization
 ```
+
+### 语音合成模型特性
+| 模型 | 特点 | 适用场景 |
+|------|------|----------|
+| **speech-2.6-hd** | 高质量，支持所有情感包括fluent/whisper | 高质量语音合成、生动讲述 |
+| **speech-2.6-turbo** | 快速，支持fluent/whisper | 实时语音合成、快速对话 |
+| **speech-02-hd** | 高质量标准模型 | 通用高质量语音 |
+| **speech-02-turbo** | 快速标准模型 | 通用快速语音 |
+| **speech-01-hd** | 基础高质量 | 兼容性需求 |
+| **speech-01-turbo** | 基础快速 | 轻量级应用 |
 
 ### 图像生成参数
 ```bash
@@ -328,11 +409,41 @@ from minimax_cli import MiniMaxClient
 
 client = MiniMaxClient()
 
-# 智能对话
+# ========== 智能对话（支持 MiniMax-M2.1）==========
+# 基础对话
 response = client.chat("介绍一下人工智能的发展历史")
 print(response)
 
-# 生成图片（基础）
+# 使用最新模型
+response = client.chat(
+    "解释量子计算的原理",
+    model="MiniMax-M2.1",
+    temperature=0.7,
+    max_tokens=2048
+)
+print(response)
+
+# Anthropic API 兼容模式（查看思考过程）
+result = client.chat(
+    "如何证明勾股定理？",
+    model="MiniMax-M2.1",
+    use_anthropic_api=True,
+    show_thinking=True
+)
+if isinstance(result, dict):
+    print("思考过程:", result['thinking'])
+    print("回答:", result['content'])
+else:
+    print(result)
+
+# 极速模式
+response = client.chat(
+    "1+1等于几？",
+    model="M2.1-lightning"
+)
+print(response)
+
+# ========== 图像生成（基础）==========
 urls = client.image("月光下的猫，水墨画风格", n=2, aspect_ratio="16:9")
 for url in urls:
     print(url)
