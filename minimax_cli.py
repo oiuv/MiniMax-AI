@@ -348,8 +348,8 @@ class MiniMaxClient:
 
         # 显示生成统计
         metadata = response.get('metadata', {})
-        success_count = metadata.get('success_count', len(result))
-        failed_count = metadata.get('failed_count', 0)
+        success_count = int(metadata.get('success_count', len(result)))
+        failed_count = int(metadata.get('failed_count', 0))
 
         self._log(f"📸 {generation_mode}成功生成: {success_count} 张")
         if failed_count > 0:
@@ -387,10 +387,8 @@ class MiniMaxClient:
         if resolution is None:
             if model in ['T2V-01-Director', 'T2V-01', 'I2V-01-Director', 'I2V-01-live', 'I2V-01']:
                 resolution = '720P'
-            elif model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast']:
-                resolution = '768P'  # 默认使用768P以获得更好质量
-            elif model == 'MiniMax-Hailuo-02':
-                resolution = '768P'  # Hailuo-02支持512P，默认768P
+            elif model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02']:
+                resolution = '768P'  # Hailuo系列默认768P以获得更好质量
             else:
                 resolution = '720P'
             self._log(f"🎯 自动选择分辨率: {resolution}")
@@ -434,15 +432,19 @@ class MiniMaxClient:
         return task_id
 
     def _get_valid_duration_resolution(self, model: str) -> list:
-        """获取模型支持的时长和分辨率组合"""
+        """获取模型支持的时长和分辨率组合（根据官方API文档）
+
+        注意：不同模型在T2V（文生视频）和I2V（图生视频）中的支持度可能不同
+        """
         combinations = {
-            # T2V (文生视频) 模型
+            # Hailuo 系列（支持 T2V 和 I2V）
             "MiniMax-Hailuo-2.3": [(6, "768P"), (10, "768P"), (6, "1080P")],
-            "MiniMax-Hailuo-2.3-Fast": [(6, "768P"), (10, "768P"), (6, "1080P")],
-            "MiniMax-Hailuo-02": [(6, "512P"), (6, "768P"), (10, "768P"), (6, "1080P")],
+            "MiniMax-Hailuo-2.3-Fast": [(6, "768P"), (10, "768P"), (6, "1080P")],  # 仅 I2V
+            "MiniMax-Hailuo-02": [(6, "512P"), (6, "768P"), (10, "768P"), (6, "1080P")],  # I2V 支持 512P
+            # T2V 专用模型
             "T2V-01-Director": [(6, "720P")],
             "T2V-01": [(6, "720P")],
-            # I2V (图生视频) 模型
+            # I2V 专用模型
             "I2V-01-Director": [(6, "720P")],
             "I2V-01-live": [(6, "720P")],
             "I2V-01": [(6, "720P")]
@@ -527,10 +529,10 @@ class MiniMaxClient:
             if not image_path.exists():
                 raise FileNotFoundError(f"图片文件不存在: {image_path}")
 
-            # 检查文件大小 (20MB限制)
+            # 检查文件大小 (统一20MB限制，API会根据用途自行验证)
             file_size = image_path.stat().st_size
             if file_size > 20 * 1024 * 1024:  # 20MB
-                raise ValueError(f"图片文件过大: {file_size/1024/1024:.1f}MB (限制: 20MB)")
+                raise ValueError(f"图片文件过大: {file_size/1024/1024:.1f}MB (限制: 20MB，图生图建议10MB以内)")
 
             # 检查文件格式
             mime_type, _ = mimetypes.guess_type(str(image_path))
@@ -585,10 +587,8 @@ class MiniMaxClient:
         if resolution is None:
             if model in ['I2V-01-Director', 'I2V-01-live', 'I2V-01']:
                 resolution = '720P'
-            elif model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast']:
-                resolution = '768P'
-            elif model == 'MiniMax-Hailuo-02':
-                resolution = '768P'  # Hailuo-02默认768P，支持512P
+            elif model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02']:
+                resolution = '768P'  # Hailuo系列默认768P以获得更好质量
             else:
                 resolution = '720P'
             self._log(f"🎯 自动选择分辨率: {resolution}")
@@ -729,15 +729,18 @@ class MiniMaxClient:
         Args:
             prompt: 视频生成描述文本
             model: 视频生成模型
-                - MiniMax-Hailuo-2.3: 全新模型，肢体动作、物理表现全面升级
-                - MiniMax-Hailuo-2.3-Fast: 图生视频快速模型，性价比高
-                - MiniMax-Hailuo-02: 经典模型，指令遵循能力强
+                - MiniMax-Hailuo-2.3: 全新模型，肢体动作、物理表现全面升级（支持T2V和I2V）
+                - MiniMax-Hailuo-2.3-Fast: 图生视频快速模型（仅支持I2V）
+                - MiniMax-Hailuo-02: 经典模型，指令遵循能力强（支持T2V和I2V，I2V支持512P）
+                - T2V-01-Director: 导演版，支持运镜控制（T2V专用）
+                - T2V-01: 基础文生视频模型（T2V专用）
+                - I2V-01系列: 图生视频模型（I2V专用）
                 - S2V-01: 主体参考视频生成模型
             first_frame_image: 首帧图片URL或路径（图生视频必需）
             last_frame_image: 尾帧图片URL或路径（首尾帧生成必需）
             subject_image: 主体参考图片URL或路径（主体参考生成必需）
             duration: 视频时长（秒）
-            resolution: 分辨率 (720P/768P/1080P)
+            resolution: 分辨率 (512P/720P/768P/1080P，仅MiniMax-Hailuo-02的I2V支持512P)
             video_name: 视频文件名
             prompt_optimizer: 是否自动优化prompt
             aigc_watermark: 是否添加水印
@@ -803,11 +806,47 @@ class MiniMaxClient:
             )
 
     def video_status(self, task_id: str) -> Dict[str, Any]:
-        """查询视频状态"""
+        """查询视频生成状态
+
+        Args:
+            task_id: 视频生成任务ID
+
+        Returns:
+            包含任务状态的字典：
+            - task_id: 任务ID
+            - status: 状态
+            - file_id: 文件ID（成功时）
+            - video_width: 视频宽度（成功时）
+            - video_height: 视频高度（成功时）
+            - base_resp: 响应基础信息
+
+        状态说明：
+            - Preparing: 准备中
+            - Queueing: 队列中
+            - Processing: 生成中
+            - Success: 成功
+            - Fail: 失败
+        """
         return self._request("GET", f"query/video_generation?task_id={task_id}")
     
     def download_video(self, file_id: str, filename: str = None) -> str:
-        """下载视频文件"""
+        """下载视频文件
+
+        Args:
+            file_id: 视频文件ID（从视频状态查询接口获得）
+            filename: 自定义文件名（可选），默认使用API返回的文件名
+
+        Returns:
+            下载后的视频文件本地路径
+
+        文件信息字段：
+            - file_id: 文件唯一标识符（整数）
+            - bytes: 文件大小（字节）
+            - created_at: 创建时间（Unix时间戳）
+            - filename: 文件名称
+            - purpose: 文件用途（如 video_generation）
+            - download_url: 文件下载URL
+        """
         self._log(f"📥 开始下载视频...")
 
         # 获取文件信息
@@ -1933,7 +1972,7 @@ def main():
     video_gen_group = parser.add_argument_group('视频生成选项')
     video_gen_group.add_argument('--video-model', default='MiniMax-Hailuo-2.3',
                                 choices=[
-                                    'MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02',
+                                    'MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02',
                                     'T2V-01-Director', 'T2V-01',  # 文生视频
                                     'I2V-01-Director', 'I2V-01-live', 'I2V-01',  # 图生视频
                                     'S2V-01'  # 主体参考视频生成
@@ -2019,7 +2058,17 @@ def main():
                     check = input("查询状态? (y/n): ")
                     if check.lower() == 'y':
                         status = client.video_status(task_id)
-                        print(f"状态: {status}")
+                        status_map = {
+                            'Preparing': '📋 准备中',
+                            'Queueing': '⏳ 队列中',
+                            'Processing': '🎬 生成中',
+                            'Success': '✅ 成功',
+                            'Fail': '❌ 失败'
+                        }
+                        print(f"📊 状态: {status_map.get(status.get('status'), status.get('status'))}")
+                        if status.get('status') == 'Success':
+                            print(f"📐 分辨率: {status.get('video_width')}x{status.get('video_height')}")
+                            print(f"📁 文件ID: {status.get('file_id')}")
                 elif cmd == 'music':
                     prompt = input("音乐描述: ")
                     lyrics = input("歌词内容: ")
@@ -2183,10 +2232,8 @@ def main():
             # 根据模型自动选择最佳分辨率
             if args.video_model in ['T2V-01-Director', 'T2V-01', 'I2V-01-Director', 'I2V-01-live', 'I2V-01']:
                 resolution = '720P'
-            elif args.video_model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast']:
-                resolution = '768P'  # 默认使用768P以获得更好质量
-            elif args.video_model == 'MiniMax-Hailuo-02':
-                resolution = '768P'  # Hailuo-02支持512P，默认768P
+            elif args.video_model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02']:
+                resolution = '768P'  # Hailuo系列默认768P以获得更好质量
             else:
                 resolution = '720P'
             print(f"🎯 自动选择分辨率: {resolution}")
@@ -2243,10 +2290,8 @@ def main():
         if i2v_resolution == 'auto':
             if args.i2v_model in ['I2V-01-Director', 'I2V-01-live', 'I2V-01']:
                 i2v_resolution = '720P'
-            elif args.i2v_model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast']:
-                i2v_resolution = '768P'
-            elif args.i2v_model == 'MiniMax-Hailuo-02':
-                i2v_resolution = '768P'
+            elif args.i2v_model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02']:
+                i2v_resolution = '768P'  # Hailuo系列默认768P以获得更好质量
             else:
                 i2v_resolution = '720P'
             print(f"🎯 自动选择分辨率: {i2v_resolution}")
@@ -2419,13 +2464,34 @@ def main():
                 file_mgr.play_audio(filepath)
     elif args.video_status:
         status = client.video_status(args.video_status)
-        print(json.dumps(status, indent=2, ensure_ascii=False))
-        
-        # 如果成功，提供下载链接
+
+        # 状态映射
+        status_map = {
+            'Preparing': '📋 准备中',
+            'Queueing': '⏳ 队列中',
+            'Processing': '🎬 生成中',
+            'Success': '✅ 成功',
+            'Fail': '❌ 失败'
+        }
+
+        # 友好的状态显示
+        print(f"🆔 任务ID: {status.get('task_id', args.video_status)}")
+        print(f"📊 状态: {status_map.get(status.get('status'), status.get('status'))}")
+
+        # 如果成功，显示视频信息
         if status.get('status') == 'Success':
             file_id = status.get('file_id')
-            print(f"🎬 视频已生成，文件ID: {file_id}")
-            print(f"📥 下载命令: python minimax_cli.py --download-video {file_id}")
+            width = status.get('video_width')
+            height = status.get('video_height')
+
+            print(f"🎬 视频已生成！")
+            print(f"📐 分辨率: {width}x{height}")
+            print(f"📁 文件ID: {file_id}")
+            print(f"📥 下载命令: python minimax_cli.py -d {file_id}")
+        elif status.get('status') == 'Fail':
+            print(f"❌ 生成失败")
+            if 'base_resp' in status:
+                print(f"错误信息: {status['base_resp'].get('status_msg', 'Unknown error')}")
     elif args.download_video:
         filepath = client.download_video(args.download_video)
         print(f"✅ 视频已下载: {filepath}")
