@@ -1178,25 +1178,32 @@ class MiniMaxClient:
             except Exception as e:
                 raise Exception(f"文件上传失败: {str(e)}")
 
-    def list_files(self, limit: int = 10, after: str = None, order: str = None) -> Dict[str, Any]:
+    def list_files(self, purpose: str) -> Dict[str, Any]:
         """
         列出文件列表
 
         Args:
-            limit: 返回文件数量限制 (10-100)，默认10
-            after: 分页游标，用于获取下一页数据
-            order: 排序方式，created_at获取最新创建文件，file_size按文件大小排序
+            purpose: 文件分类（必填）
+                - voice_clone: 快速复刻原始文件
+                - prompt_audio: 音色复刻的示例音频
+                - t2a_async_input: 异步长文本语音生成合成中音频
 
         Returns:
-            包含文件列表和分页信息的字典
+            包含文件列表的字典，每个文件包含：
+            - file_id: 文件唯一标识符
+            - bytes: 文件大小（字节）
+            - created_at: 创建时间（Unix时间戳）
+            - filename: 文件名称
+            - purpose: 文件使用目的
         """
         try:
+            # 参数验证
+            valid_purposes = ["voice_clone", "prompt_audio", "t2a_async_input"]
+            if purpose not in valid_purposes:
+                raise ValueError(f"无效的purpose: {purpose}，可选值: {valid_purposes}")
+
             # 构建查询参数
-            params = {'limit': limit}
-            if after:
-                params['after'] = after
-            if order:
-                params['order'] = order
+            params = {'purpose': purpose}
 
             return self._request(
                 'GET',
@@ -1641,7 +1648,104 @@ class MiniMaxClient:
             
             self._log(f"❌ 获取音色列表失败: {e}", "ERROR")
             return {}
-    
+
+    def voice_clone(self, file_id: int, voice_id: str,
+                   prompt_audio: int = None, prompt_text: str = None,
+                   text: str = None, model: str = "speech-2.6-hd",
+                   language_boost: str = None,
+                   need_noise_reduction: bool = False,
+                   need_volume_normalization: bool = False,
+                   aigc_watermark: bool = False) -> Dict[str, Any]:
+        """音色快速复刻
+
+        Args:
+            file_id: 待复刻音频的 file_id（通过上传文件获得，purpose=voice_clone）
+            voice_id: 克隆音色的ID
+                - 自定义 voice_id 长度范围[8,256]
+                - 首字符必须为英文字母
+                - 允许数字、字母、-、_
+                - 末位字符不可为 -、_
+                - 不可与已有 id 重复
+            prompt_audio: 示例音频的 file_id（通过上传文件获得，purpose=prompt_audio）
+            prompt_text: 示例音频的对应文本
+            text: 复刻试听文本（最多1000字符）
+            model: 试听音频模型（speech-2.6-hd, speech-2.6-turbo等）
+            language_boost: 语言增强（auto, Chinese等）
+            need_noise_reduction: 是否开启降噪，默认False
+            need_volume_normalization: 是否开启音量归一化，默认False
+            aigc_watermark: 是否添加水印，默认False
+
+        Returns:
+            包含 demo_audio 试听链接等信息的字典
+
+        文件要求：
+            - 复刻音频：mp3/m4a/wav，10秒-5分钟，≤20MB
+            - 示例音频：mp3/m4a/wav，<8秒，≤20MB
+        """
+        self._log("🎤 开始音色快速复刻...")
+
+        # 参数验证
+        if not voice_id:
+            raise ValueError("voice_id 不能为空")
+
+        # 验证 voice_id 格式
+        import re
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$', voice_id):
+            raise ValueError("voice_id 格式错误：首字符必须为英文字母，只允许数字、字母、-、_，末位不可为 - 或 _")
+
+        if len(voice_id) < 8 or len(voice_id) > 256:
+            raise ValueError("voice_id 长度必须在 8-256 之间")
+
+        # 构建请求数据
+        data = {
+            "file_id": file_id,
+            "voice_id": voice_id,
+            "need_noise_reduction": need_noise_reduction,
+            "need_volume_normalization": need_volume_normalization,
+            "aigc_watermark": aigc_watermark
+        }
+
+        # 添加可选参数
+        if prompt_audio and prompt_text:
+            data["clone_prompt"] = {
+                "prompt_audio": prompt_audio,
+                "prompt_text": prompt_text
+            }
+            self._log("📝 使用示例音频增强音色相似度")
+
+        if text:
+            if not model:
+                raise ValueError("提供试听文本时必须指定模型")
+            data["text"] = text
+            data["model"] = model
+            self._log(f"🎧 生成试听音频（模型: {model}）")
+
+        if language_boost:
+            data["language_boost"] = language_boost
+            self._log(f"🌍 语言增强: {language_boost}")
+
+        self._log(f"📁 复刻音频ID: {file_id}")
+        self._log(f"🎭 目标音色ID: {voice_id}")
+
+        response = self._request("POST", "voice_clone", json=data)
+
+        # 处理响应
+        demo_audio = response.get('demo_audio', '')
+        if demo_audio:
+            self._log("✅ 音色复刻成功")
+            self._log(f"🎵 试听音频: {demo_audio}")
+        else:
+            self._log("✅ 音色复刻成功（无试听音频）")
+
+        # 风控检查
+        input_sensitive = response.get('input_sensitive', {})
+        if input_sensitive:
+            sensitive_type = input_sensitive.get('type', 0)
+            if sensitive_type != 0:
+                self._log(f"⚠️ 警告：输入音频命中风控（类型: {sensitive_type}）", "WARN")
+
+        return response
+
     def podcast(self, user_input: str) -> str:
         """智能播客生成 - 完全自然语言输入"""
         self._log("🎙️ 开始生成智能播客...")
@@ -1903,20 +2007,43 @@ def main():
     voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
     voice_group.add_argument('-f', '--filter-voices', type=str, help='过滤音色列表关键词')
 
+    # 🎤 音色快速复刻
+    clone_group = parser.add_argument_group('音色快速复刻')
+    clone_group.add_argument('--clone', type=str, metavar='VOICE_ID',
+                            help='音色快速复刻：指定目标音色ID')
+    clone_group.add_argument('--clone-file-id', type=int, metavar='FILE_ID',
+                            help='复刻音频的file_id（必填）')
+    clone_group.add_argument('--prompt-audio', type=int, metavar='FILE_ID',
+                            help='示例音频的file_id（用于增强相似度）')
+    clone_group.add_argument('--prompt-text', type=str, metavar='TEXT',
+                            help='示例音频对应的文本（需与prompt_audio同时提供）')
+    clone_group.add_argument('--demo-text', type=str, metavar='TEXT',
+                            help='复刻试听文本（最多1000字符）')
+    clone_group.add_argument('--demo-model', default='speech-2.6-hd',
+                            choices=['speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd', 'speech-02-turbo',
+                                    'speech-01-hd', 'speech-01-turbo'],
+                            help='试听音频模型，默认speech-2.6-hd')
+    clone_group.add_argument('--clone-language-boost', metavar='LANGUAGE',
+                            help='语言增强（auto, Chinese, English等）')
+    clone_group.add_argument('--noise-reduction', action='store_true',
+                            help='开启音频降噪')
+    clone_group.add_argument('--volume-normalization', action='store_true',
+                            help='开启音量归一化')
+
     # 📁 文件管理
     file_group = parser.add_argument_group('文件管理')
     file_group.add_argument('--upload-file', type=str, metavar='FILE_PATH', help='上传文件到MiniMax平台')
     file_group.add_argument('--file-purpose', default='voice_clone',
                            choices=['voice_clone', 'prompt_audio', 't2a_async_input'],
-                           help='文件使用目的，默认voice_clone')
-    file_group.add_argument('--list-files', action='store_true', help='列出已上传的文件')
-    file_group.add_argument('--file-limit', type=int, default=10, help='文件列表返回数量限制(10-100)，默认10')
-    file_group.add_argument('--file-order', choices=['created_at', 'file_size'], help='文件排序方式')
+                           help='文件使用目的，默认voice_clone（用于上传和列出文件）')
+    file_group.add_argument('--list-files', action='store_true',
+                           help='列出指定分类的文件（需配合--file-purpose使用）')
     file_group.add_argument('--retrieve-file', type=str, metavar='FILE_ID', help='检索文件信息')
     file_group.add_argument('--download-file', type=str, metavar='FILE_ID', help='下载文件')
     file_group.add_argument('--save-path', type=str, metavar='PATH', help='下载文件保存路径')
     file_group.add_argument('--delete-file', type=str, metavar='FILE_ID', help='删除文件')
-    file_group.add_argument('--delete-purpose', choices=['voice_clone', 'prompt_audio', 't2a_async', 't2a_async_input', 'video_generation'], help='删除文件时指定的用途')
+    file_group.add_argument('--delete-purpose', choices=['voice_clone', 'prompt_audio', 't2a_async', 't2a_async_input', 'video_generation'],
+                           help='删除文件时指定的用途（必填）')
 
     # 🎵 音乐生成
     music_group = parser.add_argument_group('音乐生成')
@@ -2551,18 +2678,71 @@ def main():
             print(f"📊 大小: {file_info.get('bytes', 0)/1024:.1f} KB")
             print(f"🎯 用途: {file_info.get('purpose', '')}")
 
+    # 🎤 音色快速复刻
+    elif args.clone:
+        if not args.clone_file_id:
+            print("❌ 音色复刻必须提供 --clone-file-id 参数")
+            print("💡 提示：请先使用 --upload-file 上传复刻音频文件（--file-purpose voice_clone）")
+            return
+
+        voice_id = args.clone
+        try:
+            result = client.voice_clone(
+                file_id=args.clone_file_id,
+                voice_id=voice_id,
+                prompt_audio=args.prompt_audio,
+                prompt_text=args.prompt_text,
+                text=args.demo_text,
+                model=args.demo_model,
+                language_boost=args.clone_language_boost,
+                need_noise_reduction=args.noise_reduction,
+                need_volume_normalization=args.volume_normalization,
+                aigc_watermark=args.add_watermark if hasattr(args, 'add_watermark') else False
+            )
+
+            # 显示结果
+            print(f"\n🎤 音色复刻完成")
+            print("-" * 50)
+            print(f"🎭 音色ID: {voice_id}")
+
+            demo_audio = result.get('demo_audio', '')
+            if demo_audio:
+                print(f"🎵 试听音频: {demo_audio}")
+            else:
+                print("📝 未生成试听音频")
+
+            # 风控检查
+            input_sensitive = result.get('input_sensitive', {})
+            if input_sensitive:
+                sensitive_type = input_sensitive.get('type', 0)
+                if sensitive_type != 0:
+                    type_names = {
+                        0: "正常", 1: "严重违规", 2: "色情", 3: "广告",
+                        4: "违禁", 5: "谩骂", 6: "暴恐", 7: "其他"
+                    }
+                    print(f"⚠️ 警告：输入音频命中风控 - {type_names.get(sensitive_type, f'类型{sensitive_type}')}")
+
+            print("\n💡 使用新音色:")
+            print(f"   python minimax_cli.py -t \"你的文本\" --voice {voice_id}")
+
+        except ValueError as e:
+            print(f"❌ 参数错误: {e}")
+        except Exception as e:
+            print(f"❌ 音色复刻失败: {e}")
+
     elif args.list_files:
-        result = client.list_files(limit=args.file_limit, order=args.file_order)
+        # list_files 现在需要 purpose 参数
+        purpose = args.file_purpose  # 使用 --file-purpose 指定的分类
+        result = client.list_files(purpose=purpose)
+
         if 'error' in result:
             print(f"❌ 获取文件列表失败: {result['error']}")
         elif 'files' in result and isinstance(result['files'], list):
             files = result['files']
-            # 限制显示的文件数量以符合用户要求
-            display_files = files[:args.file_limit]
-            print(f"\n📁 文件列表 (显示前 {len(display_files)} 个，总共 {len(files)} 个文件)")
+            print(f"\n📁 文件列表 - {purpose} (共 {len(files)} 个文件)")
             print("-" * 80)
 
-            for file_info in display_files:
+            for file_info in files:
                 file_id = file_info.get('file_id', '')
                 filename = file_info.get('filename', '')
                 bytes_size = file_info.get('bytes', 0)
@@ -2578,10 +2758,6 @@ def main():
                 print(f"   🎯 用途: {purpose}")
                 print(f"   📅 上传时间: {time_str}")
                 print("-" * 40)
-
-            # 显示分页信息
-            if 'has_more' in result:
-                print(f"\n📄 还有更多文件可获取")
         else:
             print("❌ 响应格式异常")
 

@@ -403,6 +403,64 @@ python minimax_cli.py --list-voices --filter-voices "中文"
 python minimax_cli.py --list-voices --refresh-voices
 ```
 
+### 🎤 音色快速复刻
+```bash
+# 第一步：上传复刻音频（10秒-5分钟，mp3/m4a/wav，≤20MB）
+python minimax_cli.py --upload-file voice_sample.mp3 --file-purpose voice_clone
+# 输出：文件ID，例如 123456789
+
+# 第二步：执行音色复刻
+python minimax_cli.py --clone my_custom_voice --clone-file-id 123456789
+
+# 使用示例音频增强相似度（可选）
+python minimax_cli.py --clone my_custom_voice \
+    --clone-file-id 123456789 \
+    --prompt-audio 987654321 \
+    --prompt-text "This voice sounds natural and pleasant."
+
+# 生成试听音频（可选）
+python minimax_cli.py --clone my_custom_voice \
+    --clone-file-id 123456789 \
+    --demo-text "欢迎使用这个全新的音色。" \
+    --demo-model speech-2.6-hd
+
+# 开启音频处理
+python minimax_cli.py --clone my_custom_voice \
+    --clone-file-id 123456789 \
+    --noise-reduction \
+    --volume-normalization
+
+# 使用新复刻的音色
+python minimax_cli.py -t "你好，这是用新音色合成的语音。" --voice my_custom_voice
+```
+
+### 音色复刻参数说明
+- **--clone**: 自定义音色ID（必填）
+  - 长度范围：[8, 256]
+  - 首字符必须是英文字母
+  - 允许数字、字母、-、_
+  - 末位字符不可为 - 或_
+- **--clone-file-id**: 复刻音频的文件ID（必填）
+- **--prompt-audio**: 示例音频文件ID（可选，用于增强相似度）
+- **--prompt-text**: 示例音频对应的文本（需与prompt_audio同时提供）
+- **--demo-text**: 试听文本（最多1000字符）
+- **--demo-model**: 试听音频模型（默认speech-2.6-hd）
+- **--clone-language-boost**: 语言增强（auto, Chinese, English等）
+- **--noise-reduction**: 开启音频降噪
+- **--volume-normalization**: 开启音量归一化
+
+### 文件要求
+**复刻音频**：
+- 格式：mp3, m4a, wav
+- 时长：10秒 - 5分钟
+- 大小：≤20MB
+
+**示例音频**（可选）：
+- 格式：mp3, m4a, wav
+- 时长：<8秒
+- 大小：≤20MB
+
+
 ## 📖 使用示例
 
 ### 基础使用
