@@ -2089,9 +2089,9 @@ def main():
     design_group = parser.add_argument_group('音色设计')
     design_group.add_argument('--design', type=str, metavar='VOICE_ID',
                              help='音色设计：指定目标音色ID（可选，不提供则自动生成）')
-    design_group.add_argument('--design-prompt', type=str, required=True, metavar='PROMPT',
+    design_group.add_argument('--design-prompt', type=str, metavar='PROMPT',
                              help='音色描述（必填），如：声音低沉富有磁性的播音员')
-    design_group.add_argument('--preview-text', type=str, required=True, metavar='TEXT',
+    design_group.add_argument('--preview-text', type=str, metavar='TEXT',
                              help='试听文本（必填），将收取2元/万字符费用')
 
     # 🎤 语音合成选项
@@ -2755,7 +2755,7 @@ def main():
                 language_boost=args.clone_language_boost,
                 need_noise_reduction=args.noise_reduction,
                 need_volume_normalization=args.volume_normalization,
-                aigc_watermark=args.add_watermark if hasattr(args, 'add_watermark') else False
+                aigc_watermark=args.add_watermark
             )
 
             # 显示结果
@@ -2789,13 +2789,25 @@ def main():
             print(f"❌ 音色复刻失败: {e}")
 
     # 🎨 音色设计功能
-    elif hasattr(args, 'design_prompt') and args.design_prompt:
+    elif args.design or args.design_prompt:
+        # 验证必需参数
+        if not args.design_prompt:
+            print("❌ 错误：音色设计需要提供 --design-prompt 参数")
+            print("💡 使用示例：")
+            print('   python minimax_cli.py --design-prompt "声音低沉富有磁性的播音员" --preview-text "大家好"')
+            return
+        if not args.preview_text:
+            print("❌ 错误：音色设计需要提供 --preview-text 参数")
+            print("💡 使用示例：")
+            print('   python minimax_cli.py --design-prompt "声音低沉富有磁性的播音员" --preview-text "大家好"')
+            return
+
         try:
             result = client.voice_design(
                 prompt=args.design_prompt,
                 preview_text=args.preview_text,
-                voice_id=args.design if hasattr(args, 'design') else None,
-                aigc_watermark=args.add_watermark if hasattr(args, 'add_watermark') else False
+                voice_id=args.design,
+                aigc_watermark=args.add_watermark
             )
 
             # 检查响应格式
