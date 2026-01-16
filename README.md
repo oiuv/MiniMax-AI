@@ -460,6 +460,63 @@ python minimax_cli.py -t "你好，这是用新音色合成的语音。" --voice
 - 时长：<8秒
 - 大小：≤20MB
 
+### 🎨 音色设计（AI生成音色）
+
+通过文本描述生成自定义音色，无需提供音频样本。
+
+```bash
+# 基础音色设计（自动生成音色ID）
+python minimax_cli.py \
+  --design-prompt "声音低沉富有磁性的男播音员" \
+  --preview-text "大家好，欢迎收听今天的节目"
+
+# 指定音色ID
+python minimax_cli.py \
+  --design my narrator_voice \
+  --design-prompt "温柔知性的女声，适合讲故事" \
+  --preview-text "很久很久以前，有一个美丽的童话故事"
+
+# 添加水印
+python minimax_cli.py \
+  --design-prompt "充满活力的年轻男声" \
+  --preview-text "大家好，我是今天的主持人" \
+  --add-watermark
+
+# 使用设计的音色
+python minimax_cli.py -t "这是用AI设计的音色合成的语音。" --voice my_narrator_voice
+```
+
+### 音色设计参数说明
+- **--design**: 目标音色ID（可选，不提供则自动生成）
+  - 长度范围：[8, 256]
+  - 首字符必须是英文字母
+  - 允许数字、字母、-、_
+  - 末位字符不可为 - 或_
+- **--design-prompt**: 音色描述（必填）
+  - 长度范围：[10, 300]
+  - 描述声音特征，如年龄、性别、音色、风格等
+- **--preview-text**: 试听文本（必填）
+  - 长度范围：[10, 300]
+  - 将收取2元/万字符费用
+
+### 音色设计提示词建议
+```bash
+# 男声示例
+"声音低沉富有磁性的中年男播音员"
+"充满活力的年轻男声，适合体育解说"
+"稳重厚重的男声，适合新闻播报"
+
+# 女声示例
+"温柔知性的女声，适合讲故事"
+"活泼可爱的年轻女声，适合配音"
+"清澈甜美的少女音"
+
+# 风格示例
+"幽默风趣的脱口秀主持人"
+"严肃专业的纪录片旁白"
+"亲切温暖的客服声音"
+```
+
 
 ## 📖 使用示例
 
@@ -595,6 +652,55 @@ task_id = client.subject_reference_to_video(
     aigc_watermark=False
 )
 print(f"主体参考视频已生成: {task_id}")
+
+# ========== 音色快速复刻 ==========
+# 上传复刻音频
+upload_result = client.upload_file(
+    file_path="voice_sample.mp3",
+    purpose="voice_clone"
+)
+file_id = upload_result.get('file_id')
+print(f"音频已上传，文件ID: {file_id}")
+
+# 执行音色复刻
+clone_result = client.voice_clone(
+    file_id=file_id,
+    voice_id="my_custom_voice",
+    demo_text="你好，这是我的自定义音色。",
+    language_boost="auto",
+    need_noise_reduction=True,
+    need_volume_normalization=True
+)
+voice_id = clone_result.get('voice_id')
+print(f"音色复刻成功，音色ID: {voice_id}")
+
+# ========== 音色设计（AI生成音色）==========
+# 通过文本描述生成音色
+design_result = client.voice_design(
+    prompt="声音低沉富有磁性的男播音员",
+    preview_text="大家好，欢迎收听今天的节目",
+    aigc_watermark=False
+)
+new_voice_id = design_result.get('voice_id')
+trial_audio_hex = design_result.get('trial_audio')
+print(f"音色设计成功，音色ID: {new_voice_id}")
+print(f"试听音频（hex编码）: {len(trial_audio_hex)} 字符")
+
+# 保存试听音频
+if trial_audio_hex:
+    import binascii
+    audio_data = binascii.unhexlify(trial_audio_hex)
+    with open("voice_design_trial.mp3", "wb") as f:
+        f.write(audio_data)
+    print("试听音频已保存到 voice_design_trial.mp3")
+
+# 使用设计的音色进行语音合成
+tts_result = client.tts(
+    text="这是用AI设计的音色合成的语音。",
+    voice_id=new_voice_id,
+    model="speech-2.6-hd"
+)
+print(f"语音已合成: {tts_result}")
 ```
 
 ## 🔧 技术特性

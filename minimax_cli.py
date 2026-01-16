@@ -1746,6 +1746,55 @@ class MiniMaxClient:
 
         return response
 
+    def voice_design(self, prompt: str, preview_text: str,
+                    voice_id: str = None, aigc_watermark: bool = False) -> Dict[str, Any]:
+        """音色设计 - 通过文本描述生成自定义音色
+
+        Args:
+            prompt: 音色描述（如：声音低沉富有磁性的播音员）
+            preview_text: 试听音频文本（将收取2元/万字符费用）
+            voice_id: 自定义音色ID（可选，不提供时自动生成）
+            aigc_watermark: 是否添加水印，默认False
+
+        Returns:
+            包含 voice_id 和 trial_audio (hex编码) 的字典
+        """
+        self._log("🎨 开始音色设计...")
+
+        # 参数验证
+        if not prompt:
+            raise ValueError("音色描述不能为空")
+        if not preview_text:
+            raise ValueError("试听文本不能为空")
+
+        # 构建请求数据
+        data = {
+            "prompt": prompt,
+            "preview_text": preview_text,
+            "aigc_watermark": aigc_watermark
+        }
+
+        if voice_id:
+            data["voice_id"] = voice_id
+            self._log(f"🎭 目标音色ID: {voice_id}")
+        else:
+            self._log("🎭 音色ID: 自动生成")
+
+        self._log(f"📝 音色描述: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+        self._log(f"🎧 试听文本: {preview_text[:100]}{'...' if len(preview_text) > 100 else ''}")
+
+        response = self._request("POST", "voice_design", json=data)
+
+        # 处理响应
+        result_voice_id = response.get('voice_id', '')
+        trial_audio = response.get('trial_audio', '')
+
+        self._log("✅ 音色设计成功")
+        self._log(f"🎭 音色ID: {result_voice_id}")
+        self._log(f"🎵 试听音频: {len(trial_audio)} 字符（hex编码）")
+
+        return response
+
     def podcast(self, user_input: str) -> str:
         """智能播客生成 - 完全自然语言输入"""
         self._log("🎙️ 开始生成智能播客...")
@@ -2029,6 +2078,15 @@ def main():
                             help='开启音频降噪')
     clone_group.add_argument('--volume-normalization', action='store_true',
                             help='开启音量归一化')
+
+    # 🎨 音色设计
+    design_group = parser.add_argument_group('音色设计')
+    design_group.add_argument('--design', type=str, metavar='VOICE_ID',
+                             help='音色设计：指定目标音色ID（可选，不提供则自动生成）')
+    design_group.add_argument('--design-prompt', type=str, required=True, metavar='PROMPT',
+                             help='音色描述（必填），如：声音低沉富有磁性的播音员')
+    design_group.add_argument('--preview-text', type=str, required=True, metavar='TEXT',
+                             help='试听文本（必填），将收取2元/万字符费用')
 
     # 📁 文件管理
     file_group = parser.add_argument_group('文件管理')
@@ -2729,6 +2787,52 @@ def main():
             print(f"❌ 参数错误: {e}")
         except Exception as e:
             print(f"❌ 音色复刻失败: {e}")
+
+    # 🎨 音色设计功能
+    elif hasattr(args, 'design_prompt') and args.design_prompt:
+        try:
+            result = client.voice_design(
+                prompt=args.design_prompt,
+                preview_text=args.preview_text,
+                voice_id=args.design if hasattr(args, 'design') else None,
+                aigc_watermark=args.add_watermark if hasattr(args, 'add_watermark') else False
+            )
+
+            # 检查响应格式
+            if 'error' in result:
+                print(f"❌ 音色设计失败: {result['error']}")
+            elif 'base_resp' in result and result['base_resp']['status_code'] != 0:
+                print(f"❌ 音色设计失败: {result['base_resp']['status_msg']}")
+            else:
+                voice_id = result.get('voice_id', '')
+                trial_audio = result.get('trial_audio', '')
+
+                print(f"\n🎨 音色设计完成")
+                print("-" * 50)
+                print(f"🎭 音色ID: {voice_id}")
+                print(f"🎵 试听音频: {len(trial_audio)} 字符（hex编码）")
+
+                # 保存试听音频
+                if trial_audio:
+                    import binascii
+                    try:
+                        audio_data = binascii.unhexlify(trial_audio)
+                        filename = f"voice_design_{voice_id}.mp3"
+                        filepath = Path('./output/audio') / filename
+                        filepath.parent.mkdir(parents=True, exist_ok=True)
+                        with open(filepath, 'wb') as f:
+                            f.write(audio_data)
+                        print(f"💾 试听音频已保存: {filepath}")
+                    except Exception as e:
+                        print(f"⚠️ 音频保存失败: {e}")
+
+                print("\n💡 使用新音色:")
+                print(f"   python minimax_cli.py -t \"你的文本\" --voice {voice_id}")
+
+        except ValueError as e:
+            print(f"❌ 参数错误: {e}")
+        except Exception as e:
+            print(f"❌ 音色设计失败: {e}")
 
     elif args.list_files:
         # list_files 现在需要 purpose 参数
