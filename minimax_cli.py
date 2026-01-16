@@ -2008,6 +2008,12 @@ def main():
     generate_group.add_argument('-t', '--tts', metavar='语音文本', help='文本转语音')
     generate_group.add_argument('-p', '--podcast', metavar='播客主题', help='AI播客生成')
 
+    # ⚙️ 通用选项
+    common_group = parser.add_argument_group('通用选项')
+    common_group.add_argument('-I', '--interactive', action='store_true', help='交互模式')
+    common_group.add_argument('-V', '--verbose', action='store_true', help='显示详细日志')
+    common_group.add_argument('-P', '--play', action='store_true', help='生成后自动播放音频')
+
     # 🤖 对话选项
     chat_group = parser.add_argument_group('对话选项')
     chat_group.add_argument('--chat-model', default='MiniMax-M2.1',
@@ -2023,7 +2029,7 @@ def main():
                            help='使用 Anthropic API 兼容接口')
     chat_group.add_argument('--show-thinking', action='store_true',
                            help='显示模型思考过程（仅 Anthropic API 支持）')
-    
+
     # 🎨 图像生成选项
     image_group = parser.add_argument_group('图像生成选项')
     image_group.add_argument('--n', type=int, default=1, choices=range(1, 10), help='生成图片数量 (1-9)，默认1')
@@ -2046,7 +2052,7 @@ def main():
     i2i_group.add_argument('-i2i', '--image-to-image', nargs=2, metavar=('REFERENCE_IMAGE', 'PROMPT'),
                           help='图生图: 参考图片路径/URL + 描述文本')
     i2i_group.add_argument('--ref-image', help='参考图片路径或URL（用于图生图）')
-    
+
     # 🎭 音色管理
     voice_group = parser.add_argument_group('音色管理')
     voice_group.add_argument('--voice', type=str, default="female-shaonv",
@@ -2088,32 +2094,7 @@ def main():
     design_group.add_argument('--preview-text', type=str, required=True, metavar='TEXT',
                              help='试听文本（必填），将收取2元/万字符费用')
 
-    # 📁 文件管理
-    file_group = parser.add_argument_group('文件管理')
-    file_group.add_argument('--upload-file', type=str, metavar='FILE_PATH', help='上传文件到MiniMax平台')
-    file_group.add_argument('--file-purpose', default='voice_clone',
-                           choices=['voice_clone', 'prompt_audio', 't2a_async_input'],
-                           help='文件使用目的，默认voice_clone（用于上传和列出文件）')
-    file_group.add_argument('--list-files', action='store_true',
-                           help='列出指定分类的文件（需配合--file-purpose使用）')
-    file_group.add_argument('--retrieve-file', type=str, metavar='FILE_ID', help='检索文件信息')
-    file_group.add_argument('--download-file', type=str, metavar='FILE_ID', help='下载文件')
-    file_group.add_argument('--save-path', type=str, metavar='PATH', help='下载文件保存路径')
-    file_group.add_argument('--delete-file', type=str, metavar='FILE_ID', help='删除文件')
-    file_group.add_argument('--delete-purpose', choices=['voice_clone', 'prompt_audio', 't2a_async', 't2a_async_input', 'video_generation'],
-                           help='删除文件时指定的用途（必填）')
-
-    # 🎵 音乐生成
-    music_group = parser.add_argument_group('音乐生成')
-    music_group.add_argument('--lyrics', help='音乐歌词内容或文件路径(.txt/.md) [必填: 10-3000字符]')
-    music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
-    music_group.add_argument('--music-format', default='hex', choices=['hex', 'url'], help='音频返回格式，默认hex')
-    music_group.add_argument('--music-sample-rate', type=int, default=44100, choices=[16000, 24000, 32000, 44100], help='音频采样率，默认44100')
-    music_group.add_argument('--music-bitrate', type=int, default=256000, choices=[32000, 64000, 128000, 256000], help='音频比特率，默认256000')
-    music_group.add_argument('--music-encoding', default='mp3', choices=['mp3', 'wav', 'pcm'], help='音频编码格式，默认mp3')
-    music_group.add_argument('--music-watermark', action='store_true', help='在音频末尾添加水印（仅非流式生效）')
-
-    # 🎤 语音合成高级选项
+    # 🎤 语音合成选项
     tts_group = parser.add_argument_group('语音合成选项')
     tts_group.add_argument('--tts-model', default='speech-2.6-hd',
                           choices=['speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd',
@@ -2147,7 +2128,17 @@ def main():
                           help='启用LaTeX公式朗读（公式需用$包裹）')
     tts_group.add_argument('--force-cbr', action='store_true',
                           help='使用恒定比特率（仅流式+mp3生效）')
-    
+
+    # 🎵 音乐生成
+    music_group = parser.add_argument_group('音乐生成')
+    music_group.add_argument('--lyrics', help='音乐歌词内容或文件路径(.txt/.md) [必填: 10-3000字符]')
+    music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
+    music_group.add_argument('--music-format', default='hex', choices=['hex', 'url'], help='音频返回格式，默认hex')
+    music_group.add_argument('--music-sample-rate', type=int, default=44100, choices=[16000, 24000, 32000, 44100], help='音频采样率，默认44100')
+    music_group.add_argument('--music-bitrate', type=int, default=256000, choices=[32000, 64000, 128000, 256000], help='音频比特率，默认256000')
+    music_group.add_argument('--music-encoding', default='mp3', choices=['mp3', 'wav', 'pcm'], help='音频编码格式，默认mp3')
+    music_group.add_argument('--music-watermark', action='store_true', help='在音频末尾添加水印（仅非流式生效）')
+
     # 📺 视频管理
     video_group = parser.add_argument_group('视频管理')
     video_group.add_argument('-s', '--video-status', metavar='任务ID', help='查询视频状态（传入task_id）')
@@ -2202,12 +2193,21 @@ def main():
     video_adv_group.add_argument('--video-watermark', action='store_true', help='添加视频水印')
     video_adv_group.add_argument('--callback-url', help='任务状态回调URL')
     video_adv_group.add_argument('--camera-sequence', help='镜头序列JSON，如[{"action":"推进","timing":"开始"}]')
-    
-    # ⚙️ 通用选项
-    common_group = parser.add_argument_group('通用选项')
-    common_group.add_argument('-I', '--interactive', action='store_true', help='交互模式')
-    common_group.add_argument('-V', '--verbose', action='store_true', help='显示详细日志')
-    common_group.add_argument('-P', '--play', action='store_true', help='生成后自动播放音频')
+
+    # 📁 文件管理
+    file_group = parser.add_argument_group('文件管理')
+    file_group.add_argument('--upload-file', type=str, metavar='FILE_PATH', help='上传文件到MiniMax平台')
+    file_group.add_argument('--file-purpose', default='voice_clone',
+                           choices=['voice_clone', 'prompt_audio', 't2a_async_input'],
+                           help='文件使用目的，默认voice_clone（用于上传和列出文件）')
+    file_group.add_argument('--list-files', action='store_true',
+                           help='列出指定分类的文件（需配合--file-purpose使用）')
+    file_group.add_argument('--retrieve-file', type=str, metavar='FILE_ID', help='检索文件信息')
+    file_group.add_argument('--download-file', type=str, metavar='FILE_ID', help='下载文件')
+    file_group.add_argument('--save-path', type=str, metavar='PATH', help='下载文件保存路径')
+    file_group.add_argument('--delete-file', type=str, metavar='FILE_ID', help='删除文件')
+    file_group.add_argument('--delete-purpose', choices=['voice_clone', 'prompt_audio', 't2a_async', 't2a_async_input', 'video_generation'],
+                           help='删除文件时指定的用途（必填）')
     
     args = parser.parse_args()
     
