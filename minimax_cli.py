@@ -2055,8 +2055,6 @@ def main():
 
     # 🎭 音色管理
     voice_group = parser.add_argument_group('音色管理')
-    voice_group.add_argument('--voice', type=str, default="female-shaonv",
-                            help='指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)')
     voice_group.add_argument('-l', '--list-voices', choices=['system', 'cloning', 'generation', 'all'],
                             help='查询可用音色列表 (system:系统音色, cloning:快速复刻, generation:文生音色, all:全部)')
     voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
@@ -2096,6 +2094,8 @@ def main():
 
     # 🎤 语音合成选项
     tts_group = parser.add_argument_group('语音合成选项')
+    tts_group.add_argument('--voice', type=str, default="female-shaonv",
+                          help='指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)')
     tts_group.add_argument('--tts-model', default='speech-2.6-hd',
                           choices=['speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd',
                                   'speech-02-turbo', 'speech-01-hd', 'speech-01-turbo'],
