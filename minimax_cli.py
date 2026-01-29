@@ -1382,19 +1382,20 @@ class MiniMaxClient:
             return {'error': error_msg}
 
     def tts(self, text: str, voice_id: str = "female-chengshu", emotion: str = None,
-               model: str = "speech-2.6-hd",
+               model: str = "speech-2.8-hd",
                speed: float = 1.0, vol: float = 1.0, pitch: int = 0,
                sample_rate: int = 32000, format: str = "mp3", bitrate: int = 128000,
                channel: int = 1, stream: bool = False, language_boost: str = None,
                subtitle_enable: bool = False, output_format: str = "hex",
                text_normalization: bool = False, latex_read: bool = False,
-               force_cbr: bool = False) -> str:
-        """文本转语音（支持最新6个模型和完整参数）
+               force_cbr: bool = False, continuous_sound: bool = False,
+               voice_modify: dict = None, aigc_watermark: bool = False) -> str:
+        """文本转语音（支持8个模型和完整参数）
 
         Args:
             text: 需要合成语音的文本 (< 10000字符)
-            voice_id: 音色ID (支持300+系统音色)
-            model: 语音模型 [speech-2.6-hd, speech-2.6-turbo, speech-02-hd, speech-02-turbo, speech-01-hd, speech-01-turbo]
+            voice_id: 音色ID (支持系统音色、复刻音色、文生音色)
+            model: 语音模型 [speech-2.8-hd, speech-2.8-turbo, speech-2.6-hd, speech-2.6-turbo, speech-02-hd, speech-02-turbo]
             emotion: 情感控制 [happy, sad, angry, fearful, disgusted, surprised, calm, fluent, whisper]
                     fluent/whisper 仅对 speech-2.6-hd/speech-2.6-turbo 生效
             speed: 语速 [0.5, 2.0]，默认1.0
@@ -1411,15 +1412,18 @@ class MiniMaxClient:
             text_normalization: 是否启用文本规范化，默认False
             latex_read: 是否朗读latex公式（需用$包裹），默认False
             force_cbr: 是否使用恒定比特率（仅流式+mp3生效），默认False
+            continuous_sound: 子句衔接更自然（仅 speech-2.8 系列支持），默认False
+            voice_modify: 声音效果器设置 {pitch, intensity, timbre, sound_effects}
+            aigc_watermark: 添加音频水印（仅非流式），默认False
 
         Returns:
             音频数据URL或hex编码
         """
         self._log(f"🎤 开始语音合成 (模型: {model})...")
 
-        # 模型验证
-        valid_models = ["speech-2.6-hd", "speech-2.6-turbo", "speech-02-hd",
-                       "speech-02-turbo", "speech-01-hd", "speech-01-turbo"]
+        # 模型验证（仅保留 speech-02 及以后的新模型）
+        valid_models = ["speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo",
+                       "speech-02-hd", "speech-02-turbo"]
         if model not in valid_models:
             raise ValueError(f"模型必须是{valid_models}之一")
 
@@ -1491,6 +1495,18 @@ class MiniMaxClient:
         if language_boost:
             data["language_boost"] = language_boost
 
+        # continuous_sound 仅对 2.8 系列生效
+        if continuous_sound and model.startswith("speech-2.8"):
+            data["continuous_sound"] = True
+
+        # voice_modify 音效设置
+        if voice_modify:
+            data["voice_modify"] = voice_modify
+
+        # aigc_watermark 仅在非流式时生效
+        if aigc_watermark:
+            data["aigc_watermark"] = True
+
         if stream:
             data["stream_options"] = {
                 "exclude_aggregated_audio": False
@@ -1551,7 +1567,7 @@ class MiniMaxClient:
 
         # 构建请求数据
         data = {
-            "model": "speech-2.6-hd",
+            "model": "speech-2.8-hd",
             "text": text,
             "stream": False,
             "voice_setting": {
@@ -1696,11 +1712,12 @@ class MiniMaxClient:
 
     def voice_clone(self, file_id: int, voice_id: str,
                    prompt_audio: int = None, prompt_text: str = None,
-                   text: str = None, model: str = "speech-2.6-hd",
+                   text: str = None, model: str = "speech-2.8-hd",
                    language_boost: str = None,
                    need_noise_reduction: bool = False,
                    need_volume_normalization: bool = False,
-                   aigc_watermark: bool = False) -> Dict[str, Any]:
+                   aigc_watermark: bool = False,
+                   continuous_sound: bool = False) -> Dict[str, Any]:
         """音色快速复刻
 
         Args:
@@ -1713,12 +1730,13 @@ class MiniMaxClient:
                 - 不可与已有 id 重复
             prompt_audio: 示例音频的 file_id（通过上传文件获得，purpose=prompt_audio）
             prompt_text: 示例音频的对应文本
-            text: 复刻试听文本（最多1000字符）
-            model: 试听音频模型（speech-2.6-hd, speech-2.6-turbo等）
+            text: 复刻试听文本（最多1000字符，支持语气词标签）
+            model: 试听音频模型（speech-2.8-hd, speech-2.8-turbo, speech-2.6-hd, speech-02-hd等）
             language_boost: 语言增强（auto, Chinese等）
             need_noise_reduction: 是否开启降噪，默认False
             need_volume_normalization: 是否开启音量归一化，默认False
             aigc_watermark: 是否添加水印，默认False
+            continuous_sound: 子句衔接更自然（仅 speech-2.8 系列支持），默认False
 
         Returns:
             包含 demo_audio 试听链接等信息的字典
@@ -1726,6 +1744,12 @@ class MiniMaxClient:
         文件要求：
             - 复刻音频：mp3/m4a/wav，10秒-5分钟，≤20MB
             - 示例音频：mp3/m4a/wav，<8秒，≤20MB
+
+        语气词标签（仅 speech-2.8 系列支持）：
+            (laughs), (chuckle), (coughs), (clear-throat), (groans), (breath),
+            (pant), (inhale), (exhale), (gasps), (sniffs), (sighs), (snorts),
+            (burps), (lip-smacking), (humming), (hissing), (emm), (whistles),
+            (sneezes), (crying), (applause)
         """
         self._log("🎤 开始音色快速复刻...")
 
@@ -1768,6 +1792,11 @@ class MiniMaxClient:
         if language_boost:
             data["language_boost"] = language_boost
             self._log(f"🌍 语言增强: {language_boost}")
+
+        # continuous_sound 仅对 speech-2.8 系列生效
+        if continuous_sound and model and model.startswith("speech-2.8"):
+            data["continuous_sound"] = True
+            self._log("🔗 启用子句自然衔接")
 
         self._log(f"📁 复刻音频ID: {file_id}")
         self._log(f"🎭 目标音色ID: {voice_id}")
@@ -2124,16 +2153,18 @@ def main():
                             help='示例音频对应的文本（需与prompt_audio同时提供）')
     clone_group.add_argument('--demo-text', type=str, metavar='TEXT',
                             help='复刻试听文本（最多1000字符）')
-    clone_group.add_argument('--demo-model', default='speech-2.6-hd',
-                            choices=['speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd', 'speech-02-turbo',
-                                    'speech-01-hd', 'speech-01-turbo'],
-                            help='试听音频模型，默认speech-2.6-hd')
+    clone_group.add_argument('--demo-model', default='speech-2.8-hd',
+                            choices=['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-2.6-turbo',
+                                    'speech-02-hd', 'speech-02-turbo'],
+                            help='试听音频模型，默认speech-2.8-hd')
     clone_group.add_argument('--clone-language-boost', metavar='LANGUAGE',
                             help='语言增强（auto, Chinese, English等）')
     clone_group.add_argument('--noise-reduction', action='store_true',
                             help='开启音频降噪')
     clone_group.add_argument('--volume-normalization', action='store_true',
                             help='开启音量归一化')
+    clone_group.add_argument('--continuous-sound', action='store_true',
+                            help='启用子句自然衔接（仅 2.8 系列支持）')
 
     # 🎨 音色设计
     design_group = parser.add_argument_group('音色设计')
@@ -2148,10 +2179,10 @@ def main():
     tts_group = parser.add_argument_group('语音合成选项')
     tts_group.add_argument('--voice', type=str, default="female-shaonv",
                           help='指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)')
-    tts_group.add_argument('--tts-model', default='speech-2.6-hd',
-                          choices=['speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd',
-                                  'speech-02-turbo', 'speech-01-hd', 'speech-01-turbo'],
-                          help='语音合成模型，默认speech-2.6-hd')
+    tts_group.add_argument('--tts-model', default='speech-2.8-hd',
+                          choices=['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-2.6-turbo',
+                                  'speech-02-hd', 'speech-02-turbo'],
+                          help='语音合成模型：2.8系列=高精度/自然度，2.6系列=极速版，02系列=经典版，默认speech-2.8-hd')
     tts_group.add_argument('--emotion', default=None,
                           choices=['happy', 'sad', 'angry', 'fearful', 'disgusted',
                                   'surprised', 'calm', 'fluent', 'whisper'],
@@ -2811,7 +2842,8 @@ def main():
                 language_boost=args.clone_language_boost,
                 need_noise_reduction=args.noise_reduction,
                 need_volume_normalization=args.volume_normalization,
-                aigc_watermark=args.add_watermark
+                aigc_watermark=args.add_watermark,
+                continuous_sound=args.continuous_sound
             )
 
             # 显示结果

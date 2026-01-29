@@ -67,7 +67,8 @@ def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
   - **API**: OpenAI SDK 兼容 (`/v1/text/chatcompletion_v2`)
   - **Features**: user_system, group, sample_message_*
 
-- **Speech**: speech-2.6-hd (latest), speech-02 series, speech-01 series
+- **Speech**: speech-2.8-hd, speech-2.8-turbo, speech-2.6-hd, speech-2.6-turbo, speech-02-hd, speech-02-turbo
+  - **Features**: 40 languages, voice modification, continuous_sound (2.8+), latex_read, subtitle_enable
 - **Video**: MiniMax-Hailuo-2.3, T2V-01-Director, I2V-01 series
 - **Image**: image-01, image-01-live (with styles)
 - **Music**: music-2.0 (with streaming)
