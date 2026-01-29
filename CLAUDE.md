@@ -55,7 +55,18 @@ def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
 - **Response Format**: JSON with `base_resp` wrapper containing status codes
 
 ### Key Model Families
-- **Text**: MiniMax-M2 (default), MiniMax-Text-01
+- **Text Generation** (编程/Agent工作流):
+  - `MiniMax-M2.1` - 强大多语言编程能力，~60 tps
+  - `MiniMax-M2.1-lightning` - 极速版，~100 tps
+  - `MiniMax-M2` - 高效编码与 Agent 工作流
+  - **API**: Anthropic SDK 兼容 (`/anthropic/v1/messages`)
+  - **Features**: Interleaved Thinking, show_thinking
+
+- **Text Chat** (对话/角色扮演):
+  - `M2-her` - 专为对话场景优化，支持角色扮演和多轮对话
+  - **API**: OpenAI SDK 兼容 (`/v1/text/chatcompletion_v2`)
+  - **Features**: user_system, group, sample_message_*
+
 - **Speech**: speech-2.6-hd (latest), speech-02 series, speech-01 series
 - **Video**: MiniMax-Hailuo-2.3, T2V-01-Director, I2V-01 series
 - **Image**: image-01, image-01-live (with styles)
@@ -110,7 +121,7 @@ class MiniMaxClient:
     def _setup_credentials()    # Interactive config
 
 # AI Generation methods
-    def chat()                  # Text generation (MiniMax-M2)
+    def chat()                  # Text generation (M2-her for dialogue, MiniMax-M2 for general)
     def tts()                   # Text-to-speech (speech-2.6-hd)
     def image()                 # Image generation (image-01)
     def video()                 # Video generation (Hailuo-2.3)
