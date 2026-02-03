@@ -86,10 +86,10 @@ python minimax_cli.py -s2v person.jpg "一个人跑步并微笑"
 # 添加水印的高级生成
 python minimax_cli.py -s2v character.jpg "角色走向镜头并眨眼" --add-watermark --no-prompt-optimizer
 
-# 音乐生成（需要歌词）
+# 音乐生成（music-2.5）
 python minimax_cli.py -m "轻松愉快的背景音乐" --lyrics "[Verse]\n阳光洒落\n[Chorus]\n快乐每一天"
 
-# 高级音乐生成（music-2.0新功能）
+# 高级音乐生成（music-2.5新功能）
 python minimax_cli.py -m "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆" --lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" --music-watermark
 # 高质量音频输出
 python minimax_cli.py -m "摇滚音乐,激情,充满力量" --lyrics "[verse]\n吉他声响起\n[chorus]\n燃烧的青春" --music-format wav --music-bitrate 256000 --music-sample-rate 44100
@@ -125,7 +125,7 @@ python minimax_cli.py --list-voices
 | **图生视频** | I2V-01系列 | 静态图片转换为动态视频，支持运镜控制 |
 | **首尾帧生成** | MiniMax-Hailuo-02 | 起始到结束图片的过渡动画，高清输出 |
 | **主体参考生成** | S2V-01 | 基于人物主体图片生成视频，保持面部特征 |
-| **音乐创作** | music-2.0 | 自定义歌词，支持流式传输和多种音频格式 |
+| **音乐创作** | music-2.5 | 自定义歌词，支持流式传输和多种音频格式，prompt可选 |
 | **语音合成** | speech-2.6系列 | 支持6个模型，9种情感，文本规范化，LaTeX朗读 |
 | **AI播客** | 多模型组合 | 多人对话，多音色播客 |
 | **语音克隆** | voice_clone | 3秒快速克隆音色 |
@@ -349,6 +349,7 @@ python minimax_cli.py -s2v subject.jpg "描述" \
 ### 音乐生成参数
 ```bash
 python minimax_cli.py -m "独立民谣,忧郁,内省" \
+    --music-model music-2.5 \      # 音乐生成模型 [music-2.5]
     --lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" \
     --music-stream \               # 启用流式传输（仅支持hex格式）
     --music-format hex \            # 返回格式 [hex, url]，默认hex
@@ -359,9 +360,9 @@ python minimax_cli.py -m "独立民谣,忧郁,内省" \
 ```
 
 ### 音乐生成特性
-- **最新模型**: music-2.0，支持更高音乐质量和更丰富风格
-- **长度限制**: 描述[10, 2000]字符，歌词[10, 3000]字符
-- **结构标签**: 支持[Intro][Verse][Chorus][Bridge][Outro]优化音乐结构
+- **最新模型**: music-2.5，支持更高音乐质量和更丰富风格
+- **长度限制**: prompt可选[0, 2000]字符，歌词必填[1, 3500]字符
+- **结构标签**: 支持[Intro][Verse][Pre Chorus][Chorus][Interlude][Bridge][Outro][Post Chorus][Transition][Break][Hook][Build Up][Inst][Solo]优化音乐结构
 - **输出格式**: 支持hex和url两种格式，url有效期24小时
 - **音频质量**: 支持16-44.1kHz采样率，32-256kbps比特率
 - **流式传输**: 支持实时生成，hex格式输出
@@ -606,11 +607,12 @@ portrait_urls = client.image(
 # 生成音乐（基础）
 audio = client.music(
     "轻松愉悦的背景音乐",
-    "[Verse]\n阳光洒落大地\n[Chorus]\n快乐每一天"
+    "[Verse]\n阳光洒落大地\n[Chorus]\n快乐每一天",
+    model="music-2.5"
 )
 print(f"音乐已生成: {audio}")
 
-# 高级音乐生成（music-2.0新功能）
+# 高级音乐生成（music-2.5新功能）
 高质量_audio = client.music(
     "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆",
     "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫",
@@ -618,7 +620,8 @@ print(f"音乐已生成: {audio}")
     sample_rate=44100,
     bitrate=256000,
     format="wav",
-    output_format="url"
+    output_format="url",
+    model="music-2.5"
 )
 
 # 流式音乐生成
@@ -628,7 +631,8 @@ print(f"音乐已生成: {audio}")
     stream=True,
     output_format="hex",
     sample_rate=32000,
-    format="mp3"
+    format="mp3",
+    model="music-2.5"
 )
 
 # 生成播客

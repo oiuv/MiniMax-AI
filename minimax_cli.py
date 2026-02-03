@@ -998,21 +998,26 @@ class MiniMaxClient:
 
         return task_id
 
-    def music(self, prompt: str, lyrics: str, stream: bool = False,
+    def music(self, prompt: str = None, lyrics: str = None, stream: bool = False,
                 output_format: str = "hex", sample_rate: int = 44100,
                 bitrate: int = 256000, format: str = "mp3",
-                aigc_watermark: bool = False) -> str:
-        """音乐生成 (music-2.0)
+                aigc_watermark: bool = False, model: str = "music-2.5") -> str:
+        """音乐生成 (music-2.5)
 
         Args:
-            prompt: 音乐描述，用于指定风格、情绪和场景，长度限制[10, 2000]字符
-            lyrics: 歌词内容，长度限制[10, 3000]字符，支持结构标签
+            prompt: 音乐描述，用于指定风格、情绪和场景
+                    - music-2.5: 可选，[0, 2000]字符
+                    - 旧模型: 必填，[10, 2000]字符
+            lyrics: 歌词内容，支持结构标签
+                    - music-2.5: [1, 3500]字符（必填）
+                    - 旧模型: [10, 3500]字符
             stream: 是否使用流式传输，默认false
             output_format: 音频返回格式，可选url/hex，默认hex
             sample_rate: 采样率，可选16000/24000/32000/44100，默认44100
             bitrate: 比特率，可选32000/64000/128000/256000，默认256000
             format: 音频编码格式，可选mp3/wav/pcm，默认mp3
             aigc_watermark: 是否在音频末尾添加水印，默认false（仅非流式生效）
+            model: 音乐生成模型，默认music-2.5
 
         Returns:
             音频数据（hex编码或URL）
@@ -1020,43 +1025,67 @@ class MiniMaxClient:
         self._log("🎵 开始生成音乐...")
         import sys
 
-        # 严格校验长度
-        prompt = prompt.strip()
-        lyrics = lyrics.strip()
+        lyrics = lyrics.strip() if lyrics else ""
 
-        # 验证prompt长度 [10, 2000]
-        if len(prompt) < 10:
-            print(f"❌ prompt过短 ({len(prompt)}字符)")
-            print(f"💡 建议: 添加更多描述，如风格、情绪、场景")
-            print(f"📝 示例: '独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆'")
-            sys.exit(1)
+        # 模型特定的参数验证
+        is_music_25 = model == "music-2.5"
 
-        if len(prompt) > 2000:
-            print(f"❌ prompt过长 ({len(prompt)}字符)")
-            print(f"💡 建议: prompt内容请控制在2000字符以内")
-            print(f"📊 当前长度: {len(prompt)}字符，超出限制: {len(prompt) - 2000}字符")
-            print(f"📝 提示: 可以精简描述或使用更精确的关键词")
-            sys.exit(1)
+        if is_music_25:
+            # music-2.5: prompt可选 [0, 2000], lyrics必填 [1, 3500]
+            if prompt:
+                prompt = prompt.strip()
+                if len(prompt) > 2000:
+                    print(f"❌ prompt过长 ({len(prompt)}字符)")
+                    print(f"💡 music-2.5模型: prompt长度限制[0, 2000]字符")
+                    sys.exit(1)
+            else:
+                prompt = ""
 
-        # 验证lyrics长度 [10, 3000]
-        if not lyrics or not lyrics.strip():
-            print(f"❌ 歌词为必填参数")
-            print(f"💡 建议: 提供歌词内容或文件路径")
-            print(f"📝 示例: '[Verse]\n街灯微亮晚风轻抚\n[Chorus]\n推开木门香气弥漫'")
-            sys.exit(1)
+            if not lyrics:
+                print(f"❌ 歌词为必填参数")
+                print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
+                print(f"📝 示例: '[Verse]\n街灯微亮晚风轻抚\n[Chorus]\n推开木门香气弥漫'")
+                sys.exit(1)
 
-        if len(lyrics) < 10:
-            print(f"❌ 歌词过短 ({len(lyrics)}字符)")
-            print(f"💡 建议: 歌词内容请控制在10-3000字符")
-            print(f"📝 示例: '[Verse]\n街灯微亮晚风轻抚\n[Chorus]\n推开木门香气弥漫'")
-            sys.exit(1)
+            if len(lyrics) < 1:
+                print(f"❌ 歌词过短 ({len(lyrics)}字符)")
+                print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
+                sys.exit(1)
 
-        if len(lyrics) > 3000:
-            print(f"❌ 歌词过长 ({len(lyrics)}字符)")
-            print(f"💡 建议: 歌词内容请控制在3000字符以内")
-            print(f"📊 当前长度: {len(lyrics)}字符，超出限制: {len(lyrics) - 3000}字符")
-            print(f"📝 提示: 可以精简歌词或分段生成")
-            sys.exit(1)
+            if len(lyrics) > 3500:
+                print(f"❌ 歌词过长 ({len(lyrics)}字符)")
+                print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
+                sys.exit(1)
+        else:
+            # 旧模型: prompt必填 [10, 2000], lyrics [10, 3500]
+            if not prompt:
+                print(f"❌ prompt为必填参数（非music-2.5模型）")
+                print(f"💡 旧模型: prompt长度限制[10, 2000]字符")
+                print(f"📝 示例: '独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆'")
+                sys.exit(1)
+
+            prompt = prompt.strip()
+            if len(prompt) < 10:
+                print(f"❌ prompt过短 ({len(prompt)}字符)")
+                print(f"💡 旧模型: prompt长度限制[10, 2000]字符")
+                print(f"📝 建议: 添加更多描述，如风格、情绪、场景")
+                sys.exit(1)
+
+            if len(prompt) > 2000:
+                print(f"❌ prompt过长 ({len(prompt)}字符)")
+                print(f"💡 旧模型: prompt长度限制[10, 2000]字符")
+                sys.exit(1)
+
+            if not lyrics or len(lyrics) < 10:
+                print(f"❌ 歌词为必填参数")
+                print(f"💡 旧模型: 歌词长度限制[10, 3500]字符")
+                print(f"📝 示例: '[Verse]\n街灯微亮晚风轻抚\n[Chorus]\n推开木门香气弥漫'")
+                sys.exit(1)
+
+            if len(lyrics) > 3500:
+                print(f"❌ 歌词过长 ({len(lyrics)}字符)")
+                print(f"💡 旧模型: 歌词长度限制[10, 3500]字符")
+                sys.exit(1)
 
         # 验证参数组合
         if stream and output_format == "url":
@@ -1085,8 +1114,7 @@ class MiniMaxClient:
             sys.exit(1)
 
         data = {
-            "model": "music-2.0",
-            "prompt": prompt,
+            "model": model,
             "lyrics": lyrics,
             "stream": stream,
             "output_format": output_format,
@@ -1097,12 +1125,16 @@ class MiniMaxClient:
             }
         }
 
+        # music-2.5中prompt是可选的
+        if prompt:
+            data["prompt"] = prompt
+
         # 仅在非流式时添加水印
         if not stream and aigc_watermark:
             data["aigc_watermark"] = True
 
-        self._log(f"📋 使用模型: music-2.0")
-        self._log(f"🎵 音乐描述: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+        self._log(f"📋 使用模型: {model}")
+        self._log(f"🎵 音乐描述: {prompt[:100] + '...' if len(prompt) > 100 else prompt}")
         self._log(f"🎤 歌词长度: {len(lyrics)}字符")
         self._log(f"📊 音频设置: {format}, {sample_rate}Hz, {bitrate//1000}kbps")
         self._log(f"🌊 流式传输: {'是' if stream else '否'}")
@@ -2214,7 +2246,8 @@ def main():
 
     # 🎵 音乐生成
     music_group = parser.add_argument_group('音乐生成')
-    music_group.add_argument('--lyrics', help='音乐歌词内容或文件路径(.txt/.md) [必填: 10-3000字符]')
+    music_group.add_argument('--music-model', default='music-2.5', choices=['music-2.5'], help='音乐生成模型，默认music-2.5')
+    music_group.add_argument('--lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5: 1-3500字符]')
     music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
     music_group.add_argument('--music-format', default='hex', choices=['hex', 'url'], help='音频返回格式，默认hex')
     music_group.add_argument('--music-sample-rate', type=int, default=44100, choices=[16000, 24000, 32000, 44100], help='音频采样率，默认44100')
@@ -2344,7 +2377,7 @@ def main():
                         print("❌ 音乐生成需要歌词内容")
                         continue
                     
-                    audio = client.music(prompt, lyrics)
+                    audio = client.music(prompt, lyrics, model="music-2.5")
                     if audio:
                         filepath = file_mgr.save_file(audio, f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "music")
                         print(f"✅ 音乐已保存: {filepath}")
@@ -2654,7 +2687,8 @@ def main():
             sample_rate=args.music_sample_rate,
             bitrate=args.music_bitrate,
             format=args.music_encoding,
-            aigc_watermark=args.music_watermark
+            aigc_watermark=args.music_watermark,
+            model=args.music_model
         )
 
         if audio:

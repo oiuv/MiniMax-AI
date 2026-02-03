@@ -71,7 +71,7 @@ def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
   - **Features**: 40 languages, voice modification, continuous_sound (2.8+), latex_read, subtitle_enable
 - **Video**: MiniMax-Hailuo-2.3, T2V-01-Director, I2V-01 series
 - **Image**: image-01, image-01-live (with styles)
-- **Music**: music-2.0 (with streaming)
+- **Music**: music-2.5 (prompt optional, streaming support)
 - **Files**: Upload/list/retrieve/delete management system
 
 ### Implementation Critical Points
@@ -126,7 +126,7 @@ class MiniMaxClient:
     def tts()                   # Text-to-speech (speech-2.6-hd)
     def image()                 # Image generation (image-01)
     def video()                 # Video generation (Hailuo-2.3)
-    def music()                 # Music generation (music-2.0)
+    def music()                 # Music generation (music-2.5)
 
 # File Management (complete CRUD)
     def upload_file()           # Upload with multipart
