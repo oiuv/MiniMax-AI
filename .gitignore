@@ -196,6 +196,9 @@ backup/
 # Claude Code 配置和缓存
 .claude/
 
+# OpenCode 配置和工作目录（开发计划等临时文档）
+.opencode/
+
 # 临时文件
 tmpclaude*/
 tmp*
