@@ -1938,7 +1938,7 @@ class MiniMaxClient:
         
         # 使用标准格式请求，避免response_format参数
         data = {
-            "model": "MiniMax-M2",
+            "model": "MiniMax-M2.1",
             "messages": messages,
             "max_tokens": 20480,
             "temperature": 0.8
