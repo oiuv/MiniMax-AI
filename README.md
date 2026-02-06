@@ -1,6 +1,6 @@
 # MiniMax AI 工具包 🚀
 
-功能完整的MiniMax AI统一命令行工具，支持所有最新AI功能，包括播客系统、语音克隆、图像/视频/音乐生成等。
+功能完整的MiniMax AI统一命令行工具，支持所有最新AI功能，包括语音克隆、图像/视频/音乐生成、播客系统等。
 
 ## 🚀 快速开始
 
@@ -107,9 +107,6 @@ python minimax_cli.py -t "公式：$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$" 
 # 使用fluent/whisper情感（仅2.6模型）
 python minimax_cli.py -t "生动讲述一个故事" --tts-model speech-2.6-hd --emotion fluent
 
-# AI播客生成
-python minimax_cli.py -p "人工智能如何改变未来"
-
 # 查询音色列表
 python minimax_cli.py --list-voices
 ```
@@ -127,8 +124,43 @@ python minimax_cli.py --list-voices
 | **主体参考生成** | S2V-01 | 基于人物主体图片生成视频，保持面部特征 |
 | **音乐创作** | music-2.5 | 自定义歌词，支持流式传输和多种音频格式，prompt可选 |
 | **语音合成** | speech-2.6系列 | 支持6个模型，9种情感，文本规范化，LaTeX朗读 |
-| **AI播客** | 多模型组合 | 多人对话，多音色播客 |
 | **语音克隆** | voice_clone | 3秒快速克隆音色 |
+| **AI播客** | PodcastGenerator | 独立播客生成器，多角色对话、多音色合成 |
+
+## 🎙️ AI播客生成（独立工具）
+
+播客功能已独立为 `podcast_cli.py`，提供更专业的播客生成体验。
+
+```bash
+# 基础播客生成
+python podcast_cli.py "人工智能如何改变未来"
+
+# 自定义欢迎语
+python podcast_cli.py "AI技术播客" --welcome-text "听众朋友们好，欢迎收听本期节目！"
+
+# 从文件读取主题
+python podcast_cli.py topic.txt
+
+# 指定输出目录
+python podcast_cli.py topic.txt -o ./my_podcasts
+```
+
+### 播客功能特性
+- **多角色对话**：支持生成多人对话播客
+- **多音色合成**：自动匹配角色音色
+- **情感控制**：每段对话可指定情感
+- **背景音乐**：自动添加BGM
+- **日志保存**：生成过程详细记录
+
+### 文件结构
+```
+./output/podcasts/
+└── podcasts/          # 播客文件
+    └── podcast_20240206_120000.mp3
+./output/logs/
+└── podcast_dialogue_*.json   # 对话内容
+└── podcast_error_*.json     # 错误日志
+```
 
 ## 📁 文件管理
 
@@ -635,9 +667,8 @@ print(f"音乐已生成: {audio}")
     model="music-2.5"
 )
 
-# 生成播客
-podcast = client.podcast("人工智能如何改变未来")
-print(f"播客已生成: {podcast}")
+# 生成播客（使用独立工具）
+# python podcast_cli.py "人工智能如何改变未来"
 
 # 首尾帧视频生成
 task_id = client.start_end_to_video(
@@ -722,33 +753,6 @@ print(f"语音已合成: {tts_result}")
 - **成功率**: ≥95%
 - **音频质量**: 192kbps MP3, 44.1kHz
 - **图像质量**: 1080P高清
-
-## 🚀 项目结构
-
-```
-MiniMax-AI/
-├── minimax_cli.py          # 主CLI程序
-├── setup.py               # 一键安装脚本
-├── requirements.txt       # 依赖列表
-├── start.bat             # Windows一键启动
-├── README.md             # 项目说明
-├── CLAUDE.md             # 开发指导
-├── QWEN.md               # 产品需求
-├── .gitignore            # Git忽略规则
-├── examples/             # 示例文件
-│   ├── tts_story.txt     # TTS测试文本
-│   └── prompts/          # 提示词示例
-├── output/               # 生成文件
-│   ├── audio/
-│   ├── images/
-│   ├── videos/
-│   ├── music/
-│   └── podcasts/
-└── legacy/               # 备份文件
-    └── *.py
-```
-
-## 📞 支持
 
 - **GitHub Issues**: 报告问题和功能请求
 - **文档**: 详见 `CLAUDE.md` 开发指导
