@@ -1962,14 +1962,23 @@ class MiniMaxClient:
         }
         
         try:
-            # 清理可能的Markdown格式并解析JSON
+            # 清理可能的Markdown格式
             cleaned_content = content.strip()
             if cleaned_content.startswith('```json'):
                 cleaned_content = cleaned_content[7:]
             if cleaned_content.endswith('```'):
                 cleaned_content = cleaned_content[:-3]
             cleaned_content = cleaned_content.strip()
-            
+
+            # 检测是否是被转义的JSON字符串（以"开头和结尾）
+            if cleaned_content.startswith('"') and cleaned_content.endswith('"'):
+                try:
+                    # 先解析外层字符串，获取实际的JSON
+                    cleaned_content = json.loads(cleaned_content)
+                    self._log(f"🔄 检测到转义JSON，已自动解码")
+                except json.JSONDecodeError:
+                    pass  # 如果不是有效的转义JSON，保持原样
+
             dialogues = json.loads(cleaned_content)
             response_log["dialogue_count"] = len(dialogues)
             
@@ -1991,7 +2000,7 @@ class MiniMaxClient:
             for dialogue in dialogues:
                 speaker = dialogue.get('speaker', '未知')
                 text = dialogue.get('text', '')
-                voice_id = dialogue.get('voice_id', 'female-chengshu')
+                voice_id = dialogue.get('voice_id', 'moss_audio_aaa1346a-7ce7-11f0-8e61-2e6e3c7ee85d')
                 emotion = dialogue.get('emotion', 'calm')
                 
                 if text and len(text.strip()) > 5:
