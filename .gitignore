@@ -121,23 +121,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# MiniMax AI 项目特定文件
-
-# 生成的媒体文件
-*.mp3
-*.mp4
-*.wav
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.webp
-*.svg
-
-# 输出目录
+# MiniMax AI 输出目录
+output/
 outputs/
-minimax_outputs/
-output_*/
+output_*
 
 # 日志文件
 *.log
