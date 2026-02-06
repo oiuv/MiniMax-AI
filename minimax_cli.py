@@ -25,10 +25,16 @@ class MiniMaxClient:
         self.api_key = os.getenv('MINIMAX_API_KEY')
         self.base_url = "https://api.minimaxi.com/v1"
         self.verbose = False
-        
+
+        # 统一输出目录
+        self.base_dir = Path('./output')
+        self.base_dir.mkdir(exist_ok=True)
+        for subdir in ['audio', 'images', 'videos', 'music', 'podcasts', 'logs']:
+            (self.base_dir / subdir).mkdir(exist_ok=True)
+
         if not self.group_id or not self.api_key:
             self._setup_credentials()
-    
+
     def _log(self, message: str, level: str = "INFO"):
         """日志输出"""
         print(f"[{level}] {message}")
@@ -1346,7 +1352,7 @@ class MiniMaxClient:
 
             # 确定保存路径
             if save_path is None:
-                output_dir = Path.home() / "minimax_outputs" / "downloads"
+                output_dir = self.base_dir / "downloads"
                 output_dir.mkdir(parents=True, exist_ok=True)
                 save_path = output_dir / filename
             else:
@@ -1901,10 +1907,28 @@ class MiniMaxClient:
 
         return response
 
-    def podcast(self, user_input: str) -> str:
-        """智能播客生成 - 完全自然语言输入"""
+    def podcast(self, user_input: str, welcome_text: str = "欢迎收听本期节目！",
+                bgm_path: str = None) -> str:
+        """智能播客生成 - 完整结构
+
+        Args:
+            user_input: 播客主题描述
+            welcome_text: 欢迎语（默认：欢迎收听本期节目！）
+            bgm_path: BGM目录路径（默认templates/）
+        """
         self._log("🎙️ 开始生成智能播客...")
-        
+
+        # BGM目录（固定使用templates/）
+        bgm_path = Path("templates")
+        bgm01_path = bgm_path / "bgm01.wav"
+        bgm02_path = bgm_path / "bgm02.wav"
+
+        self._log(f"📝 欢迎语: {welcome_text}")
+
+        # 默认音色
+        MINI_VOICE = "moss_audio_aaa1346a-7ce7-11f0-8e61-2e6e3c7ee85d"
+        MAX_VOICE = "moss_audio_ce44fc67-7ce3-11f0-8de5-96e35d26fb85"
+
         # 读取系统提示词模板
         template_path = Path("templates/podcast_system_prompt.txt")
         if template_path.exists():
@@ -1964,22 +1988,35 @@ class MiniMaxClient:
         try:
             # 清理可能的Markdown格式
             cleaned_content = content.strip()
-            if cleaned_content.startswith('```json'):
-                cleaned_content = cleaned_content[7:]
-            if cleaned_content.endswith('```'):
-                cleaned_content = cleaned_content[:-3]
-            cleaned_content = cleaned_content.strip()
 
-            # 检测是否是被转义的JSON字符串（以"开头和结尾）
-            if cleaned_content.startswith('"') and cleaned_content.endswith('"'):
+            # 检测并处理被转义的JSON字符串（直接尝试解析）
+            try:
+                inner_content = json.loads(cleaned_content)
+                cleaned_content = inner_content
+                self._log(f"🔄 检测到转义JSON，已自动解码")
+            except json.JSONDecodeError:
+                # 清理Markdown格式
+                if cleaned_content.startswith('```json'):
+                    cleaned_content = cleaned_content[7:]
+                elif cleaned_content.startswith('```'):
+                    cleaned_content = cleaned_content[3:]
+                if cleaned_content.endswith('```'):
+                    cleaned_content = cleaned_content[:-3]
+                cleaned_content = cleaned_content.strip()
+
+                # 再次尝试解析转义JSON
                 try:
-                    # 先解析外层字符串，获取实际的JSON
-                    cleaned_content = json.loads(cleaned_content)
+                    inner_content = json.loads(cleaned_content)
+                    cleaned_content = inner_content
                     self._log(f"🔄 检测到转义JSON，已自动解码")
                 except json.JSONDecodeError:
-                    pass  # 如果不是有效的转义JSON，保持原样
+                    pass
 
-            dialogues = json.loads(cleaned_content)
+            # 如果已经是list（解析成功），直接使用；否则再解析一次
+            if isinstance(cleaned_content, list):
+                dialogues = cleaned_content
+            else:
+                dialogues = json.loads(cleaned_content)
             response_log["dialogue_count"] = len(dialogues)
             
             # 保存解析后的JSON文件
@@ -1994,77 +2031,216 @@ class MiniMaxClient:
             
             self._log(f"📝 对话内容已保存: {json_file}")
             self._log(f"🎭 成功解析对话：{len(dialogues)} 段")
-            
+
             # 为每段生成音频
-            audio_segments = []
+            dialogue_audios = []
             for dialogue in dialogues:
                 speaker = dialogue.get('speaker', '未知')
                 text = dialogue.get('text', '')
-                voice_id = dialogue.get('voice_id', 'moss_audio_aaa1346a-7ce7-11f0-8e61-2e6e3c7ee85d')
+                voice_id = dialogue.get('voice_id', MINI_VOICE)
                 emotion = dialogue.get('emotion', 'calm')
-                
+
                 if text and len(text.strip()) > 5:
                     # 验证并修正情感类型
                     valid_emotions = ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm"]
                     corrected_emotion = emotion.lower()
                     if corrected_emotion not in valid_emotions:
-                        # 智能映射到有效情感
                         emotion_mapping = {
-                            "excited": "happy",
-                            "joyful": "happy",
-                            "delighted": "happy",
-                            "cheerful": "happy",
-                            "upset": "sad",
-                            "depressed": "sad",
-                            "disappointed": "sad",
-                            "mad": "angry",
-                            "furious": "angry",
-                            "irritated": "angry",
-                            "scared": "fearful",
-                            "terrified": "fearful",
-                            "anxious": "fearful",
-                            "shocked": "surprised",
-                            "amazed": "surprised",
-                            "startled": "surprised",
-                            "disgusted": "disgusted",
-                            "revolted": "disgusted",
-                            "neutral": "calm",
-                            "thoughtful": "calm",
-                            "curious": "surprised",
-                            "concerned": "fearful",
-                            "nostalgic": "sad",
-                            "proud": "happy",
-                            "confident": "happy"
+                            "excited": "happy", "joyful": "happy", "delighted": "happy", "cheerful": "happy",
+                            "upset": "sad", "depressed": "sad", "disappointed": "sad",
+                            "mad": "angry", "furious": "angry", "irritated": "angry",
+                            "scared": "fearful", "terrified": "fearful", "anxious": "fearful",
+                            "shocked": "surprised", "amazed": "surprised", "startled": "surprised",
+                            "disgusted": "disgusted", "revolted": "disgusted",
+                            "neutral": "calm", "thoughtful": "calm", "curious": "surprised",
+                            "concerned": "fearful", "nostalgic": "sad", "proud": "happy", "confident": "happy"
                         }
                         corrected_emotion = emotion_mapping.get(corrected_emotion, "calm")
                         self._log(f"⚠️ 情感映射: {emotion} → {corrected_emotion}")
-                    
-                    self._log(f"🗣️ {speaker}({voice_id}): {text[:50]}...")
-                    audio = self.tts(text.strip(), voice_id, corrected_emotion)
-                    audio_segments.append(audio)
-            
-            if audio_segments:
-                # 合并所有音频
-                combined_audio = "".join(audio_segments)
-                self._log("✅ 播客生成完成")
-                return combined_audio
-            else:
+
+                    self._log(f"🗣️ {speaker}: {text[:40]}...")
+                    audio_hex = self.tts(text.strip(), voice_id, corrected_emotion)
+                    if audio_hex:
+                        dialogue_audios.append(audio_hex)
+
+            if not dialogue_audios:
                 self._log("❌ 没有有效音频内容", "ERROR")
                 return ""
-                
+
+            # 使用 ffmpeg 拼接完整播客
+            import subprocess
+
+            def run_ffmpeg(args, check=True):
+                """运行ffmpeg命令"""
+                result = subprocess.run(['ffmpeg', '-y'] + args, capture_output=True, text=True)
+                if result.returncode != 0:
+                    self._log(f"⚠️ FFmpeg错误: {result.stderr[:200]}", "WARN")
+                return result.returncode == 0
+
+            def hex_to_mp3(hex_data: str, output_path: str):
+                """hex转MP3"""
+                audio_bytes = bytes.fromhex(hex_data)
+                with open(output_path, 'wb') as f:
+                    f.write(audio_bytes)
+
+            def normalize_audio(input_path: str, output_path: str) -> bool:
+                """转MP3（不调整音量）"""
+                if not Path(input_path).exists():
+                    self._log(f"⚠️ 文件不存在: {input_path}", "ERROR")
+                    return False
+                result = run_ffmpeg(['-i', input_path, '-c:a', 'libmp3lame', '-f', 'mp3', output_path], check=False)
+                if not result:
+                    self._log(f"⚠️ 转码失败: {input_path}", "ERROR")
+                return result
+
+            def concat_audio(files: list, output_path: str):
+                """拼接音频，统一转MP3"""
+                if not files:
+                    return False
+                # 用 concat protocol (file://) 避免Windows路径问题
+                list_content = ''
+                for f in files:
+                    list_content += f"file '{Path(f).absolute().as_posix()}'\n"
+                list_file = self.base_dir / 'concat_list.txt'
+                with open(list_file, 'w', encoding='utf-8') as f:
+                    f.write(list_content)
+                return run_ffmpeg(['-f', 'concat', '-safe', '0', '-i', str(list_file), '-c:a', 'libmp3lame', '-q:a', '2', output_path], check=False)
+
+            # 生成欢迎语
+            self._log("🎵 合成欢迎语...")
+            welcome_hex = self.tts(welcome_text, MINI_VOICE, "happy")
+            if not welcome_hex:
+                self._log("❌ 欢迎语生成失败", "ERROR")
+                return ""
+            welcome_path = self.base_dir / 'welcome.mp3'
+            hex_to_mp3(welcome_hex, str(welcome_path))
+
+            if not dialogue_audios:
+                self._log("❌ 没有有效对话音频", "ERROR")
+                return ""
+
+            # 保存对话音频
+            dialogue_files = []
+            for i, audio_hex in enumerate(dialogue_audios):
+                dia_path = self.base_dir / f'dia_{i}.mp3'
+                hex_to_mp3(audio_hex, str(dia_path))
+                dialogue_files.append(str(dia_path))
+
+            # 合并对话
+            dialogue_concat = self.base_dir / 'dialogue.mp3'
+            if len(dialogue_files) == 1:
+                dialogue_files[0].rename(dialogue_concat)
+            else:
+                if not concat_audio(dialogue_files, str(dialogue_concat)):
+                    self._log("❌ 对话合并失败", "ERROR")
+                    return ""
+
+            self._log("🎼 拼接完整播客...")
+
+            # 构建音频列表
+            all_parts = []
+
+            # BGM01
+            bgm01_part = self.base_dir / 'bgm01_part.mp3'
+            if normalize_audio(str(bgm01_path), str(bgm01_part)):
+                all_parts.append(str(bgm01_part))
+
+            # 欢迎语
+            welcome_norm = self.base_dir / 'welcome_norm.mp3'
+            if normalize_audio(str(welcome_path), str(welcome_norm)):
+                all_parts.append(str(welcome_norm))
+
+            # BGM02（淡出）
+            bgm02_norm = self.base_dir / 'bgm02_norm.mp3'
+            bgm02_part = self.base_dir / 'bgm02_fade.mp3'
+            if normalize_audio(str(bgm02_path), str(bgm02_norm)):
+                run_ffmpeg(['-i', str(bgm02_norm), '-af', 'afade=t=out:st=0:d=1', '-c:a', 'libmp3lame', str(bgm02_part)])
+                all_parts.append(str(bgm02_part))
+
+            # 对话
+            dialogue_norm = self.base_dir / 'dialogue_norm.mp3'
+            if dialogue_concat.exists() and normalize_audio(str(dialogue_concat), str(dialogue_norm)):
+                all_parts.append(str(dialogue_norm))
+
+            # 结尾 BGM
+            if Path(bgm01_part).exists():
+                all_parts.append(str(bgm01_part))
+            if Path(bgm02_part).exists():
+                all_parts.append(str(bgm02_part))
+
+            if not all_parts:
+                self._log("❌ 没有有效音频片段", "ERROR")
+                return ""
+
+            # 拼接所有部分
+            output_path = self.base_dir / 'podcasts' / f'podcast_{timestamp}.mp3'
+            if not concat_audio(all_parts, str(output_path)):
+                self._log("❌ 最终拼接失败", "ERROR")
+                return ""
+
+            if not output_path.exists():
+                self._log("❌ 播客拼接失败", "ERROR")
+                return ""
+
+            # 获取时长
+            result = subprocess.run(
+                ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(output_path)],
+                capture_output=True, text=True
+            )
+            total_duration = float(result.stdout.strip()) if result.stdout.strip() else 0
+
+            self._log(f"✅ 播客生成完成: {output_path}")
+            self._log(f"📊 总时长: {total_duration:.1f}秒")
+
+            # 清理临时文件
+            self._log("🧹 清理临时文件...")
+            temp_patterns = [
+                self.base_dir / 'dia_*.mp3',
+                self.base_dir / 'welcome*.mp3',
+                self.base_dir / 'bgm01_part.mp3',
+                self.base_dir / 'bgm02_norm.mp3',
+                self.base_dir / 'bgm02_fade.mp3',
+                self.base_dir / 'dialogue*.mp3',
+                self.base_dir / 'concat_list.txt',
+            ]
+            import glob
+            for pattern in temp_patterns:
+                for f in glob.glob(str(pattern)):
+                    try:
+                        Path(f).unlink()
+                    except:
+                        pass
+
+            # 返回hex
+            with open(output_path, 'rb') as f:
+                return f.read().hex()
+
         except json.JSONDecodeError as e:
             response_log["status"] = "error"
             response_log["error"] = str(e)
-            
+            response_log["error_pos"] = f"line {e.lineno} column {e.colno} (char {e.pos})"
+
             # 保存错误日志
             log_file = log_dir / f"podcast_error_{timestamp}.json"
             with open(log_file, 'w', encoding='utf-8') as f:
                 json.dump(response_log, f, ensure_ascii=False, indent=2)
-                
+
+            # 显示错误位置附近的上下文
+            error_context = ""
+            if hasattr(e, 'doc') and e.doc:
+                start = max(0, e.pos - 50)
+                end = min(len(e.doc), e.pos + 50)
+                error_context = f"\n...{e.doc[start:e.pos]}<<<ERROR>>>{e.doc[e.pos:end]}..."
+
             self._log(f"❌ JSON解析失败: {e}", "ERROR")
+            self._log(f"📍 错误位置: line {e.lineno} column {e.colno} (char {e.pos})")
             self._log(f"📝 错误日志已保存: {log_file}")
-            if self.verbose:
-                self._log(f"📝 原始内容: {content}")
+            return ""
+
+        except Exception as e:
+            self._log(f"❌ 播客生成错误: {e}", "ERROR")
+            import traceback
+            traceback.print_exc()
             return ""
 
 class FileManager:
@@ -2264,6 +2440,11 @@ def main():
     music_group.add_argument('--music-encoding', default='mp3', choices=['mp3', 'wav', 'pcm'], help='音频编码格式，默认mp3')
     music_group.add_argument('--music-watermark', action='store_true', help='在音频末尾添加水印（仅非流式生效）')
 
+    # 🎙️ 播客生成选项
+    podcast_group = parser.add_argument_group('播客生成选项')
+    podcast_group.add_argument('--welcome-text', type=str, help='自定义欢迎语（默认根据主题自动生成）')
+    podcast_group.add_argument('--bgm-path', type=str, help='BGM文件目录路径（默认templates/，需要bgm01.wav和bgm02.wav）')
+
     # 📺 视频管理
     video_group = parser.add_argument_group('视频管理')
     video_group.add_argument('-s', '--video-status', metavar='任务ID', help='查询视频状态（传入task_id）')
@@ -2399,7 +2580,8 @@ def main():
                         print(f"✅ 已保存: {filepath}")
                 elif cmd == 'podcast':
                     user_input = input("播客描述: ")
-                    audio = client.podcast(user_input)
+                    welcome_text = input("欢迎语（直接回车自动生成）: ").strip() or None
+                    audio = client.podcast(user_input, welcome_text=welcome_text)
                     if audio:
                         filepath = file_mgr.save_file(audio, f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "podcasts")
                         print(f"✅ 播客已保存: {filepath}")
@@ -2771,7 +2953,8 @@ def main():
         if user_input.endswith(('.txt', '.md')) and Path(user_input).exists():
             with open(user_input, 'r', encoding='utf-8') as f:
                 user_input = f.read()
-        audio = client.podcast(user_input)
+        welcome_text = args.welcome_text if args.welcome_text else "欢迎收听本期节目！"
+        audio = client.podcast(user_input, welcome_text=welcome_text, bgm_path=args.bgm_path)
         if audio:
             filepath = file_mgr.save_file(audio, f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "podcasts")
             print(filepath)
