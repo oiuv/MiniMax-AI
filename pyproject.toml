@@ -1,0 +1,39 @@
+[project]
+name = "minimax-ai-cli"
+version = "1.0.0"
+description = "MiniMax AI Command Line Interface"
+readme = "README.md"
+requires-python = ">=3.7"
+authors = [
+    { name = "MiniMax AI", email = "support@minimax.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "flake8",
+    "black",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+python-preference = "system"
+
+[project.scripts]
+minimax = "minimax_cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = []
+include = ["*.py", "templates/*", "examples/*"]
+

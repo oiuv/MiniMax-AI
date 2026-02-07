@@ -4,20 +4,39 @@
 
 ## 🚀 快速开始
 
-### 一键安装
+### 安装方式
+
+#### 1. 传统方式（pip）
 ```bash
-# 安装所有依赖
+# 一键安装
 python setup.py
 
 # 或手动安装
 pip install -r requirements.txt
 ```
 
+#### 2. 现代方式（uv，推荐）
+uv 是一个快速、现代的 Python 包管理器，提供更好的依赖管理和虚拟环境体验。
+
+```bash
+# 安装 uv（首次使用）
+# Windows: winget install astral-sh.uv
+# macOS: brew install uv
+# Linux: cargo install uv
+
+# 使用 uv 运行项目（自动管理依赖和虚拟环境）
+uv run python minimax_cli.py --interactive
+```
+
 ### 使用方式
 
 #### 交互模式（推荐）
 ```bash
+# 传统方式
 python minimax_cli.py --interactive
+
+# uv 方式
+uv run python minimax_cli.py --interactive
 ```
 
 #### 命令行模式
