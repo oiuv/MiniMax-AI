@@ -2339,7 +2339,7 @@ def main():
                         print(url)
                         save = input("保存文件? (y/n): ")
                         if save.lower() == 'y':
-                            filepath = file_mgr.save_file(url, f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg", "images")
+                            filepath = file_mgr.save_file(url, f"image_{file_mgr.generate_timestamp()}.jpg", "images")
                             print(f"✅ 已保存: {filepath}")
                 elif cmd == 'video':
                     prompt = input("描述: ")
@@ -2368,7 +2368,7 @@ def main():
                     
                     audio = client.music(prompt, lyrics, model="music-2.5")
                     if audio:
-                        filepath = file_mgr.save_file(audio, f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "music")
+                        filepath = file_mgr.save_file(audio, f"music_{file_mgr.generate_timestamp()}.mp3", "music")
                         print(f"✅ 音乐已保存: {filepath}")
                 elif cmd == 'lyrics':
                     mode = input("生成模式 [write_full_song/edit]: ").strip() or 'write_full_song'
@@ -2386,15 +2386,8 @@ def main():
                     result = client.generate_lyrics(mode=mode, prompt=prompt, lyrics=lyrics, title=title)
 
                     if result.get("lyrics"):
-                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                        filename = f"lyrics_{timestamp}.txt"
-                        filepath = Path('./output/music') / filename
-                        filepath.parent.mkdir(exist_ok=True)
-
-                        with open(filepath, 'w', encoding='utf-8') as f:
-                            f.write(result["lyrics"])
-
-                        print(f"✅ 歌词已保存: {filepath}")
+                        lyrics_filepath = file_mgr.save_text(result["lyrics"], f"lyrics_{file_mgr.generate_timestamp()}.txt", "music")
+                        print(f"✅ 歌词已保存: {lyrics_filepath}")
 
                         print(f"\n🎵 歌曲标题: {result.get('song_title', '未命名')}")
                         if result.get('style_tags'):
@@ -2406,7 +2399,7 @@ def main():
                     voice = input("音色ID (默认 female-chengshu): ").strip() or "female-chengshu"
                     audio = client.tts(text, voice)
                     if audio:
-                        filepath = file_mgr.save_file(audio, f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "audio")
+                        filepath = file_mgr.save_file(audio, f"tts_{file_mgr.generate_timestamp()}.mp3", "audio")
                         print(f"✅ 已保存: {filepath}")
             except KeyboardInterrupt:
                 break
@@ -2461,7 +2454,7 @@ def main():
         if result:
             for i, item in enumerate(result):
                 if args.response_format == 'url':
-                    filepath = file_mgr.save_file(item, f"image2image_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{i+1}.jpg", "images")
+                    filepath = file_mgr.save_file(item, f"image2image_{file_mgr.generate_timestamp()}_{i+1}.jpg", "images")
                     print(f"✅ 图生图已保存: {filepath}")
                     print(f"🔗 图片URL: {item}")
                     if args.play:
@@ -2471,7 +2464,7 @@ def main():
                     import base64
                     try:
                         image_data = base64.b64decode(item)
-                        filepath = Path('./output/images') / f"image2image_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{i+1}.jpg"
+                        filepath = file_mgr.get_path("images", f"image2image_{file_mgr.generate_timestamp()}_{i+1}.jpg")
                         filepath.parent.mkdir(exist_ok=True)
                         with open(filepath, 'wb') as f:
                             f.write(image_data)
@@ -2503,7 +2496,7 @@ def main():
             for i, item in enumerate(result):
                 if args.response_format == 'url':
                     # URL格式：下载并保存
-                    filepath = file_mgr.save_file(item, f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{i+1}.jpg", "images")
+                    filepath = file_mgr.save_file(item, f"image_{file_mgr.generate_timestamp()}_{i+1}.jpg", "images")
                     print(f"✅ 图片已保存: {filepath}")
                     print(f"🔗 图片URL: {item}")
                     if args.play:
@@ -2515,8 +2508,7 @@ def main():
                     try:
                         # 解码Base64数据
                         image_data = base64.b64decode(item)
-                        filepath = Path('./output/images') / f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{i+1}.jpg"
-                        filepath.parent.mkdir(exist_ok=True)
+                        filepath = file_mgr.get_path("images", f"image_{file_mgr.generate_timestamp()}_{i+1}.jpg")
                         with open(filepath, 'wb') as f:
                             f.write(image_data)
                         print(f"✅ Base64图片已保存: {filepath}")
@@ -2695,7 +2687,7 @@ def main():
             if args.music_format == 'url':
                 # URL格式：下载并保存
                 ext = args.music_encoding
-                filepath = file_mgr.save_file(audio, f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}", "music")
+                filepath = file_mgr.save_file(audio, f"music_{file_mgr.generate_timestamp()}.{ext}", "music")
                 print(filepath)
                 if args.play:
                     file_mgr.play_audio(filepath)
@@ -2706,8 +2698,7 @@ def main():
                     # 解码hex数据
                     audio_data = bytes.fromhex(audio)
                     ext = args.music_encoding
-                    filepath = Path('./output/music') / f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
-                    filepath.parent.mkdir(exist_ok=True)
+                    filepath = file_mgr.get_path("music", f"music_{file_mgr.generate_timestamp()}.{ext}")
                     with open(filepath, 'wb') as f:
                         f.write(audio_data)
                     print(f"✅ 音乐已保存: {filepath}")
@@ -2736,15 +2727,10 @@ def main():
 
         # 保存歌词到文件
         if result.get("lyrics"):
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = file_mgr.generate_timestamp()
 
             # 保存歌词文件
-            lyrics_filename = f"lyrics_{timestamp}.txt"
-            lyrics_filepath = Path('./output/music') / lyrics_filename
-            lyrics_filepath.parent.mkdir(exist_ok=True)
-
-            with open(lyrics_filepath, 'w', encoding='utf-8') as f:
-                f.write(result["lyrics"])
+            lyrics_filepath = file_mgr.save_text(result["lyrics"], f"lyrics_{timestamp}.txt", "music")
 
             print(f"✅ 歌词已保存: {lyrics_filepath}")
 
@@ -2752,15 +2738,12 @@ def main():
             song_title = result.get('song_title', '')
             style_tags = result.get('style_tags', '')
             if song_title or style_tags:
-                prompt_filename = f"music_prompt_{timestamp}.txt"
-                prompt_filepath = Path('./output/music') / prompt_filename
-
-                with open(prompt_filepath, 'w', encoding='utf-8') as f:
-                    if song_title:
-                        f.write(f"歌曲标题: {song_title}\n")
-                    if style_tags:
-                        f.write(f"风格标签: {style_tags}\n")
-
+                prompt_content = ""
+                if song_title:
+                    prompt_content += f"歌曲标题: {song_title}\n"
+                if style_tags:
+                    prompt_content += f"风格标签: {style_tags}\n"
+                prompt_filepath = file_mgr.save_text(prompt_content, f"music_prompt_{timestamp}.txt", "music")
                 print(f"✅ 提示词已保存: {prompt_filepath}")
 
             # 显示完整结果
@@ -2802,7 +2785,7 @@ def main():
                 # 如果是URL格式，需要下载文件
                 ext = 'mp3'  # URL通常是mp3
 
-            filepath = file_mgr.save_file(audio, f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}", "audio")
+            filepath = file_mgr.save_file(audio, f"tts_{file_mgr.generate_timestamp()}.{ext}", "audio")
             print(filepath)
             if args.play:
                 file_mgr.play_audio(filepath)
@@ -2989,11 +2972,7 @@ def main():
                     import binascii
                     try:
                         audio_data = binascii.unhexlify(trial_audio)
-                        filename = f"voice_design_{voice_id}.mp3"
-                        filepath = Path('./output/audio') / filename
-                        filepath.parent.mkdir(parents=True, exist_ok=True)
-                        with open(filepath, 'wb') as f:
-                            f.write(audio_data)
+                        filepath = file_mgr.save_file(trial_audio, f"voice_design_{voice_id}.mp3", "audio")
                         print(f"💾 试听音频已保存: {filepath}")
                     except Exception as e:
                         print(f"⚠️ 音频保存失败: {e}")
