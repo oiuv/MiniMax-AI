@@ -2026,10 +2026,14 @@ class FileManager:
                 sys.exit(1)
         return content
 
+    def generate_timestamp(self) -> str:
+        """生成时间戳字符串"""
+        return datetime.now().strftime('%Y%m%d_%H%M%S')
+
     def save_file(self, data: str, filename: str, subdir: str) -> str:
-        """保存文件"""
+        """保存文件（支持URL或十六进制数据）"""
         filepath = self.base_dir / subdir / filename
-        
+
         if data.startswith('http'):
             # 下载URL
             import urllib.request
@@ -2038,8 +2042,24 @@ class FileManager:
             # 保存十六进制数据
             with open(filepath, 'wb') as f:
                 f.write(bytes.fromhex(data))
-        
+
         return str(filepath)
+
+    def save_text(self, content: str, filename: str, subdir: str) -> str:
+        """保存文本内容到文件"""
+        filepath = self.base_dir / subdir / filename
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return str(filepath)
+
+    def get_path(self, subdir: str, filename: str = None) -> Path:
+        """获取输出目录路径，可选带文件名"""
+        path = self.base_dir / subdir
+        path.mkdir(parents=True, exist_ok=True)
+        return path / filename if filename else path
     
     def play_audio(self, filepath: str):
         """自动播放音频文件"""
