@@ -1174,6 +1174,93 @@ class MiniMaxClient:
 
         return audio_data
 
+    def generate_lyrics(self, mode: str = "write_full_song", prompt: str = None,
+                      lyrics: str = None, title: str = None) -> Dict[str, Any]:
+        """歌词生成 (lyrics_generation)
+
+        Args:
+            mode: 生成模式 [write_full_song, edit]
+                - write_full_song: 写完整歌曲
+                - edit: 编辑/续写歌词
+            prompt: 提示词/指令，用于描述歌曲主题、风格或编辑方向。为空时随机生成。
+            lyrics: 现有歌词内容，仅在 `edit` 模式下有效。可用于续写或修改已有歌词。
+            title: 歌曲标题。传入后输出将保持该标题不变。
+
+        Returns:
+            包含生成结果的字典，包括：
+                - song_title: 歌曲标题
+                - style_tags: 风格标签
+                - lyrics: 生成的歌词（含结构标签）
+                - base_resp: 响应状态信息
+        """
+        self._log("🎵 开始生成歌词...")
+
+        # 参数验证
+        valid_modes = ["write_full_song", "edit"]
+        if mode not in valid_modes:
+            raise ValueError(f"无效的生成模式: {mode}，可选值: {valid_modes}")
+
+        if prompt and len(prompt) > 2000:
+            raise ValueError(f"提示词过长，最多支持2000字符，当前{len(prompt)}字符")
+
+        if lyrics and len(lyrics) > 3500:
+            raise ValueError(f"歌词过长，最多支持3500字符，当前{len(lyrics)}字符")
+
+        # 构建请求数据
+        data = {
+            "mode": mode
+        }
+
+        if prompt:
+            data["prompt"] = prompt.strip()
+
+        if lyrics:
+            data["lyrics"] = lyrics.strip()
+
+        if title:
+            data["title"] = title.strip()
+
+        self._log(f"📋 生成模式: {mode}")
+        if prompt:
+            self._log(f"📝 提示词: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+        if lyrics:
+            self._log(f"🎤 现有歌词长度: {len(lyrics)}字符")
+        if title:
+            self._log(f"🎭 歌曲标题: {title}")
+
+        response = self._request("POST", "lyrics_generation", json=data)
+
+        # 处理响应
+        self._log("✅ 歌词生成完成")
+
+        result = {
+            "song_title": response.get("song_title", ""),
+            "style_tags": response.get("style_tags", ""),
+            "lyrics": response.get("lyrics", ""),
+            "base_resp": response.get("base_resp", {})
+        }
+
+        # 显示生成结果信息
+        if result["song_title"]:
+            self._log(f"🎵 歌曲标题: {result['song_title']}")
+
+        if result["style_tags"]:
+            self._log(f"🎨 风格标签: {result['style_tags']}")
+
+        if result["lyrics"]:
+            # 计算歌词行数和字符数
+            lines = result["lyrics"].count("\n") + 1
+            chars = len(result["lyrics"])
+            self._log(f"📊 歌词统计: {lines}行，{chars}字符")
+
+            # 显示前几行歌词预览
+            preview = "\n".join(result["lyrics"].split("\n")[:5])
+            if lines > 5:
+                preview += "\n..."
+            self._log(f"🎤 歌词预览:\n{preview}")
+
+        return result
+
     def upload_file(self, file_path: str, purpose: str) -> Dict[str, Any]:
         """上传文件到MiniMax平台
 
@@ -1961,6 +2048,7 @@ def main():
     generate_group.add_argument('-v', '--video', metavar='视频描述', help='AI视频生成')
     generate_group.add_argument('-m', '--music', metavar='音乐描述', help='AI音乐生成')
     generate_group.add_argument('-t', '--tts', metavar='语音文本', help='文本转语音')
+    generate_group.add_argument('-l', '--lyrics', metavar='歌词提示', help='AI歌词生成（支持完整创作或续写）')
 
     # ⚙️ 通用选项
     common_group = parser.add_argument_group('通用选项')
@@ -1979,9 +2067,10 @@ def main():
                            help='显示模型思考过程（仅 --anthropic-api 支持）')
     chat_group.add_argument('--system-prompt', type=str, help='系统提示词（定义AI角色和行为）')
     chat_group.add_argument('--user-system', type=str, metavar='TEXT',
-                           help='用户角色设定（用于角色扮演场景，M2-her专属）')
+                           help='用户角色设定（用于角色扮演场景定义用户身份，M2-her专属）')
     chat_group.add_argument('--group', type=str, metavar='NAME',
                            help='对话分组名称（标识对话场景，M2-her专属）')
+
     chat_group.add_argument('--sample-user', type=str, metavar='TEXT',
                            help='示例用户消息（引导对话风格，M2-her专属）')
     chat_group.add_argument('--sample-ai', type=str, metavar='TEXT',
@@ -2016,7 +2105,7 @@ def main():
 
     # 🎭 音色管理
     voice_group = parser.add_argument_group('音色管理')
-    voice_group.add_argument('-l', '--list-voices', choices=['system', 'cloning', 'generation', 'all'],
+    voice_group.add_argument('--list-voices', choices=['system', 'cloning', 'generation', 'all'],
                             help='查询可用音色列表 (system:系统音色, cloning:快速复刻, generation:文生音色, all:全部)')
     voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
     voice_group.add_argument('-f', '--filter-voices', type=str, help='过滤音色列表关键词')
@@ -2092,10 +2181,20 @@ def main():
     tts_group.add_argument('--force-cbr', action='store_true',
                           help='使用恒定比特率（仅流式+mp3生效）')
 
-    # 🎵 音乐生成
+    # 🎵 歌词生成选项
+    lyrics_group = parser.add_argument_group('歌词生成选项')
+    lyrics_group.add_argument('--lyrics-mode', default='write_full_song',
+                           choices=['write_full_song', 'edit'],
+                           help='生成模式：write_full_song=完整歌曲创作，edit=编辑/续写（默认write_full_song）')
+    lyrics_group.add_argument('--lyrics-title', type=str, metavar='TITLE',
+                           help='歌曲标题（可选，不提供时自动生成）')
+    lyrics_group.add_argument('--lyrics-input', type=str, metavar='FILE',
+                           help='现有歌词文件路径（仅在edit模式下使用）')
+
+    # 🎵 音乐生成选项
     music_group = parser.add_argument_group('音乐生成')
     music_group.add_argument('--music-model', default='music-2.5', choices=['music-2.5'], help='音乐生成模型，默认music-2.5')
-    music_group.add_argument('--lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5: 1-3500字符]')
+    music_group.add_argument('--music-lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5: 1-3500字符]')
     music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
     music_group.add_argument('--music-format', default='hex', choices=['hex', 'url'], help='音频返回格式，默认hex')
     music_group.add_argument('--music-sample-rate', type=int, default=44100, choices=[16000, 24000, 32000, 44100], help='音频采样率，默认44100')
@@ -2185,7 +2284,7 @@ def main():
         print("💬 MiniMax AI 交互模式 (输入 'quit' 退出)")
         while True:
             try:
-                cmd = input("\n选择功能 [chat/image/video/music/tts/quit]: ").strip()
+                cmd = input("\n选择功能 [chat/image/video/music/lyrics/tts/quit]: ").strip()
                 if cmd == 'quit':
                     break
                 elif cmd == 'chat':
@@ -2229,6 +2328,37 @@ def main():
                     if audio:
                         filepath = file_mgr.save_file(audio, f"music_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3", "music")
                         print(f"✅ 音乐已保存: {filepath}")
+                elif cmd == 'lyrics':
+                    mode = input("生成模式 [write_full_song/edit]: ").strip() or 'write_full_song'
+                    prompt = input("提示词 (可选): ").strip()
+                    title = input("歌曲标题 (可选): ").strip()
+                    lyrics = None
+                    if mode == 'edit':
+                        lyrics_path = input("现有歌词文件路径 (可选): ").strip()
+                        if lyrics_path and Path(lyrics_path).exists():
+                            with open(lyrics_path, 'r', encoding='utf-8') as f:
+                                lyrics = f.read()
+                        else:
+                            lyrics = input("现有歌词内容 (可选): ").strip()
+
+                    result = client.generate_lyrics(mode=mode, prompt=prompt, lyrics=lyrics, title=title)
+
+                    if result.get("lyrics"):
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        filename = f"lyrics_{timestamp}.txt"
+                        filepath = Path('./output/music') / filename
+                        filepath.parent.mkdir(exist_ok=True)
+
+                        with open(filepath, 'w', encoding='utf-8') as f:
+                            f.write(result["lyrics"])
+
+                        print(f"✅ 歌词已保存: {filepath}")
+
+                        print(f"\n🎵 歌曲标题: {result.get('song_title', '未命名')}")
+                        if result.get('style_tags'):
+                            print(f"🎨 风格标签: {result.get('style_tags')}")
+                        print(f"\n🎤 完整歌词:")
+                        print(result["lyrics"])
                 elif cmd == 'tts':
                     text = input("文本: ")
                     voice = input("音色ID (默认 female-chengshu): ").strip() or "female-chengshu"
@@ -2509,13 +2639,13 @@ def main():
                 prompt = f.read()
         
         # 歌词为必填
-        if not args.lyrics:
+        if not args.music_lyrics:
             print("❌ 音乐生成需要歌词参数")
-            print("💡 使用: --lyrics '歌词内容' 或 --lyrics lyrics.txt")
+            print("💡 使用: --music-lyrics '歌词内容' 或 --music-lyrics lyrics.txt")
             print("📝 提示: 使用换行符分隔，支持[Intro][Verse][Chorus][Bridge][Outro]结构")
             sys.exit(1)
-        
-        lyrics = args.lyrics
+
+        lyrics = args.music_lyrics
         if lyrics.endswith(('.txt', '.md')) and Path(lyrics).exists():
             with open(lyrics, 'r', encoding='utf-8') as f:
                 lyrics = f.read()
@@ -2560,6 +2690,45 @@ def main():
                 except Exception as e:
                     print(f"❌ 音频保存失败: {e}")
                     print(f"🔗 音频数据前50字符: {audio[:50]}...")
+    elif args.lyrics:
+        # 歌词生成处理
+        prompt = args.lyrics
+        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
+            with open(prompt, 'r', encoding='utf-8') as f:
+                prompt = f.read()
+
+        # 处理现有歌词文件（仅在edit模式下使用）
+        lyrics = None
+        if args.lyrics_input and Path(args.lyrics_input).exists():
+            with open(args.lyrics_input, 'r', encoding='utf-8') as f:
+                lyrics = f.read()
+
+        # 调用歌词生成方法
+        result = client.generate_lyrics(
+            mode=args.lyrics_mode,
+            prompt=prompt,
+            lyrics=lyrics,
+            title=args.lyrics_title
+        )
+
+        # 保存歌词到文件
+        if result.get("lyrics"):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"lyrics_{timestamp}.txt"
+            filepath = Path('./output/music') / filename
+            filepath.parent.mkdir(exist_ok=True)
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(result["lyrics"])
+
+            print(f"✅ 歌词已保存: {filepath}")
+
+            # 显示完整结果
+            print(f"\n🎵 歌曲标题: {result.get('song_title', '未命名')}")
+            if result.get('style_tags'):
+                print(f"🎨 风格标签: {result.get('style_tags')}")
+            print(f"\n🎤 完整歌词:")
+            print(result["lyrics"])
     elif args.tts:
         text = args.tts
         if text.endswith(('.txt', '.md')) and Path(text).exists():

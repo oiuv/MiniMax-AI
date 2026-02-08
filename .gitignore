@@ -189,3 +189,6 @@ backup/
 # 临时文件
 tmpclaude*/
 tmp*
+
+# TRAE AI 配置和缓存
+.trae/
