@@ -19,18 +19,12 @@ import argparse
 
 class MiniMaxClient:
     """精简版MiniMax客户端"""
-    
+
     def __init__(self):
         self.group_id = os.getenv('MINIMAX_GROUP_ID')
         self.api_key = os.getenv('MINIMAX_API_KEY')
         self.base_url = "https://api.minimaxi.com/v1"
         self.verbose = False
-
-        # 统一输出目录
-        self.base_dir = Path('./output')
-        self.base_dir.mkdir(exist_ok=True)
-        for subdir in ['audio', 'images', 'videos', 'music', 'podcasts', 'logs']:
-            (self.base_dir / subdir).mkdir(exist_ok=True)
 
         if not self.group_id or not self.api_key:
             self._setup_credentials()
@@ -114,10 +108,12 @@ class MiniMaxClient:
                 self._log(f"🔄 重试第{attempt+1}次...", "WARN")
                 time.sleep(1)
     
-    def chat(self, message: str, model: str = "M2-her",
-             system_prompt: str = None, user_system: str = None,
-             group: str = None, sample_user: str = None, sample_ai: str = None,
-             temperature: float = 1.0, max_tokens: int = 1024, stream: bool = False,
+    def chat(self, message: str, model: str = "MiniMax-M2.1",
+             system_prompt: str = None,
+             # M2-her 专属参数（暂时注释，等待 API BUG 修复）
+             # user_system: str = None, group: str = None,
+             # sample_user: str = None, sample_ai: str = None,
+             temperature: float = 1.0, max_tokens: int = 2048, stream: bool = False,
              use_anthropic_api: bool = False, show_thinking: bool = False) -> str:
         """智能对话（支持 M2-her 和 Anthropic API 兼容接口）
 
@@ -125,10 +121,11 @@ class MiniMaxClient:
             message: 用户消息内容
             model: 模型名称，可选值：M2-her, MiniMax-M2.1, MiniMax-M2.1-lightning, MiniMax-M2
             system_prompt: 系统提示词（定义 AI 的角色和行为）
-            user_system: 用户角色设定（用于角色扮演场景定义用户身份）
-            group: 对话分组名称（标识对话场景）
-            sample_user: 示例用户消息（引导模型理解期望的对话风格）
-            sample_ai: 示例 AI 回复（配合 sample_user 使用）
+            # M2-her 专属参数（暂时注释）
+            # user_system: 用户角色设定（用于角色扮演场景定义用户身份）
+            # group: 对话分组名称（标识对话场景）
+            # sample_user: 示例用户消息（引导模型理解期望的对话风格）
+            # sample_ai: 示例 AI 回复（配合 sample_user 使用）
             temperature: 温度参数 (0.0, 1.0]，推荐 1.0
             max_tokens: 最大生成 token 数，M2-her 上限为 2048
             stream: 是否使用流式响应
@@ -184,21 +181,15 @@ class MiniMaxClient:
                 if system_prompt:
                     messages.append({"role": "system", "content": system_prompt})
 
-                # user_system: 定义用户角色（角色扮演场景）
-                if user_system:
-                    messages.append({"role": "user_system", "content": user_system})
-
-                # group: 对话分组/场景名称
-                if group:
-                    messages.append({"role": "group", "content": group})
-
-                # sample_message_user: 示例用户消息
-                if sample_user:
-                    messages.append({"role": "sample_message_user", "content": sample_user})
-
-                # sample_message_ai: 示例 AI 回复
-                if sample_ai:
-                    messages.append({"role": "sample_message_ai", "content": sample_ai})
+                # user_system, group, sample_user, sample_ai 已暂时注释，等待 API BUG 修复
+                # if user_system:
+                #     messages.append({"role": "user_system", "content": user_system})
+                # if group:
+                #     messages.append({"role": "group", "content": group})
+                # if sample_user:
+                #     messages.append({"role": "sample_message_user", "content": sample_user})
+                # if sample_ai:
+                #     messages.append({"role": "sample_message_ai", "content": sample_ai})
 
                 # user: 用户消息
                 messages.append({"role": "user", "content": message})
@@ -248,6 +239,11 @@ class MiniMaxClient:
         if use_anthropic_api:
             return self._parse_anthropic_response(response, show_thinking)
         else:
+            # 检查响应是否包含 choices
+            if 'choices' not in response or response['choices'] is None:
+                self._log(f"❌ API 响应异常: {response}")
+                raise ValueError(f"API 响应格式异常: {response}")
+
             content = response['choices'][0]['message']['content']
             self._log(f"📄 生成内容长度: {len(content)} 字符")
             return content
@@ -2100,7 +2096,7 @@ def main():
 
     # 🤖 文本生成/对话选项
     chat_group = parser.add_argument_group('文本生成/对话选项')
-    chat_group.add_argument('--chat-model', default='M2-her',
+    chat_group.add_argument('--chat-model', default='MiniMax-M2.1',
                            choices=['M2-her', 'MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
                            help='模型选择：M2-her=对话/角色扮演, MiniMax-M2系列=编程/Agent工作流（需配合--anthropic-api）')
     chat_group.add_argument('--anthropic-api', action='store_true',
@@ -2108,15 +2104,15 @@ def main():
     chat_group.add_argument('--show-thinking', action='store_true',
                            help='显示模型思考过程（仅 --anthropic-api 支持）')
     chat_group.add_argument('--system-prompt', type=str, help='系统提示词（定义AI角色和行为）')
-    chat_group.add_argument('--user-system', type=str, metavar='TEXT',
-                           help='用户角色设定（用于角色扮演场景定义用户身份，M2-her专属）')
-    chat_group.add_argument('--group', type=str, metavar='NAME',
-                           help='对话分组名称（标识对话场景，M2-her专属）')
-
-    chat_group.add_argument('--sample-user', type=str, metavar='TEXT',
-                           help='示例用户消息（引导对话风格，M2-her专属）')
-    chat_group.add_argument('--sample-ai', type=str, metavar='TEXT',
-                           help='示例AI回复（配合--sample-user使用，M2-her专属）')
+    # M2-her 专属参数（暂时注释，等待 API BUG 修复）
+    # chat_group.add_argument('--user-system', type=str, metavar='TEXT',
+    #                        help='用户角色设定（用于角色扮演场景定义用户身份，M2-her专属）')
+    # chat_group.add_argument('--group', type=str, metavar='NAME',
+    #                        help='对话分组名称（标识对话场景，M2-her专属）')
+    # chat_group.add_argument('--sample-user', type=str, metavar='TEXT',
+    #                        help='示例用户消息（引导对话风格，M2-her专属）')
+    # chat_group.add_argument('--sample-ai', type=str, metavar='TEXT',
+    #                        help='示例AI回复（配合--sample-user使用，M2-her专属）')
     chat_group.add_argument('--temperature', type=float, default=1.0,
                            help='温度参数 (0.0-1.0]，默认1.0')
     chat_group.add_argument('--max-tokens', type=int, default=1024,
@@ -2412,10 +2408,11 @@ def main():
             message=content,
             model=args.chat_model,
             system_prompt=args.system_prompt,
-            user_system=args.user_system,
-            group=args.group,
-            sample_user=args.sample_user,
-            sample_ai=args.sample_ai,
+            # M2-her 专属参数已暂时注释
+            # user_system=args.user_system,
+            # group=args.group,
+            # sample_user=args.sample_user,
+            # sample_ai=args.sample_ai,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
             use_anthropic_api=args.anthropic_api,
@@ -2743,7 +2740,7 @@ def main():
                     prompt_content += f"歌曲标题: {song_title}\n"
                 if style_tags:
                     prompt_content += f"风格标签: {style_tags}\n"
-                prompt_filepath = file_mgr.save_text(prompt_content, f"music_prompt_{timestamp}.txt", "music")
+                prompt_filepath = file_mgr.save_text(prompt_content, f"prompt_{timestamp}.txt", "music")
                 print(f"✅ 提示词已保存: {prompt_filepath}")
 
             # 显示完整结果
