@@ -2000,10 +2000,32 @@ class FileManager:
     def __init__(self):
         self.base_dir = Path('./output')
         self.base_dir.mkdir(exist_ok=True)
-        
+
         for subdir in ['audio', 'images', 'videos', 'music', 'podcasts']:
             (self.base_dir / subdir).mkdir(exist_ok=True)
-    
+
+    def read_input(self, content: str, param_name: str = "内容") -> str:
+        """读取输入内容，支持文本或文件路径
+
+        Args:
+            content: 输入内容（文本或文件路径）
+            param_name: 参数名称（用于错误提示）
+
+        Returns:
+            读取的文本内容
+
+        Raises:
+            SystemExit: 文件不存在时退出
+        """
+        if content.endswith(('.txt', '.md')):
+            if Path(content).exists():
+                with open(content, 'r', encoding='utf-8') as f:
+                    return f.read()
+            else:
+                print(f"❌ {param_name}文件不存在: {content}")
+                sys.exit(1)
+        return content
+
     def save_file(self, data: str, filename: str, subdir: str) -> str:
         """保存文件"""
         filepath = self.base_dir / subdir / filename
@@ -2370,10 +2392,7 @@ def main():
                 break
     
     elif args.chat:
-        content = args.chat
-        if content.endswith(('.txt', '.md')) and Path(content).exists():
-            with open(content, 'r', encoding='utf-8') as f:
-                content = f.read()
+        content = file_mgr.read_input(args.chat, "对话内容")
 
         # 调用更新后的 chat 方法
         response = client.chat(
@@ -2441,10 +2460,7 @@ def main():
                     except Exception as e:
                         print(f"❌ Base64图片保存失败: {e}")
     elif args.image:
-        prompt = args.image
-        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
-            with open(prompt, 'r', encoding='utf-8') as f:
-                prompt = f.read()
+        prompt = file_mgr.read_input(args.image, "图像描述")
 
         # 使用新的图像生成参数
         result = client.image(
@@ -2489,10 +2505,7 @@ def main():
                         print(f"❌ Base64图片保存失败: {e}")
                         print(f"🔗 Base64数据前50字符: {item[:50]}...")
     elif args.video:
-        prompt = args.video
-        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
-            with open(prompt, 'r', encoding='utf-8') as f:
-                prompt = f.read()
+        prompt = file_mgr.read_input(args.video, "视频描述")
 
         # 处理镜头序列
         camera_sequence = None
@@ -2633,11 +2646,8 @@ def main():
         print(f"💡 查询状态: python minimax_cli.py -s {task_id}")
     elif args.music:
         # 处理文件路径或文本内容
-        prompt = args.music
-        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
-            with open(prompt, 'r', encoding='utf-8') as f:
-                prompt = f.read()
-        
+        prompt = file_mgr.read_input(args.music, "音乐描述")
+
         # 歌词为必填
         if not args.music_lyrics:
             print("❌ 音乐生成需要歌词参数")
@@ -2645,10 +2655,7 @@ def main():
             print("📝 提示: 使用换行符分隔，支持[Intro][Verse][Chorus][Bridge][Outro]结构")
             sys.exit(1)
 
-        lyrics = args.music_lyrics
-        if lyrics.endswith(('.txt', '.md')) and Path(lyrics).exists():
-            with open(lyrics, 'r', encoding='utf-8') as f:
-                lyrics = f.read()
+        lyrics = file_mgr.read_input(args.music_lyrics, "音乐歌词")
         
         # 使用新的音乐生成参数
         audio = client.music(
@@ -2692,16 +2699,12 @@ def main():
                     print(f"🔗 音频数据前50字符: {audio[:50]}...")
     elif args.lyrics:
         # 歌词生成处理
-        prompt = args.lyrics
-        if prompt.endswith(('.txt', '.md')) and Path(prompt).exists():
-            with open(prompt, 'r', encoding='utf-8') as f:
-                prompt = f.read()
+        prompt = file_mgr.read_input(args.lyrics, "歌词提示")
 
         # 处理现有歌词文件（仅在edit模式下使用）
         lyrics = None
-        if args.lyrics_input and Path(args.lyrics_input).exists():
-            with open(args.lyrics_input, 'r', encoding='utf-8') as f:
-                lyrics = f.read()
+        if args.lyrics_input:
+            lyrics = file_mgr.read_input(args.lyrics_input, "现有歌词")
 
         # 调用歌词生成方法
         result = client.generate_lyrics(
@@ -2714,26 +2717,41 @@ def main():
         # 保存歌词到文件
         if result.get("lyrics"):
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"lyrics_{timestamp}.txt"
-            filepath = Path('./output/music') / filename
-            filepath.parent.mkdir(exist_ok=True)
 
-            with open(filepath, 'w', encoding='utf-8') as f:
+            # 保存歌词文件
+            lyrics_filename = f"lyrics_{timestamp}.txt"
+            lyrics_filepath = Path('./output/music') / lyrics_filename
+            lyrics_filepath.parent.mkdir(exist_ok=True)
+
+            with open(lyrics_filepath, 'w', encoding='utf-8') as f:
                 f.write(result["lyrics"])
 
-            print(f"✅ 歌词已保存: {filepath}")
+            print(f"✅ 歌词已保存: {lyrics_filepath}")
+
+            # 保存提示词文件（标题 + 风格标签），方便生成音乐时使用
+            song_title = result.get('song_title', '')
+            style_tags = result.get('style_tags', '')
+            if song_title or style_tags:
+                prompt_filename = f"music_prompt_{timestamp}.txt"
+                prompt_filepath = Path('./output/music') / prompt_filename
+
+                with open(prompt_filepath, 'w', encoding='utf-8') as f:
+                    if song_title:
+                        f.write(f"歌曲标题: {song_title}\n")
+                    if style_tags:
+                        f.write(f"风格标签: {style_tags}\n")
+
+                print(f"✅ 提示词已保存: {prompt_filepath}")
 
             # 显示完整结果
-            print(f"\n🎵 歌曲标题: {result.get('song_title', '未命名')}")
-            if result.get('style_tags'):
-                print(f"🎨 风格标签: {result.get('style_tags')}")
+            if song_title:
+                print(f"\n🎵 歌曲标题: {song_title}")
+            if style_tags:
+                print(f"🎨 风格标签: {style_tags}")
             print(f"\n🎤 完整歌词:")
             print(result["lyrics"])
     elif args.tts:
-        text = args.tts
-        if text.endswith(('.txt', '.md')) and Path(text).exists():
-            with open(text, 'r', encoding='utf-8') as f:
-                text = f.read()
+        text = file_mgr.read_input(args.tts, "语音文本")
 
         # 使用更新后的TTS参数
         audio = client.tts(
