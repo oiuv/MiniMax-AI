@@ -517,45 +517,6 @@ class MiniMaxClient:
 
         return detected
 
-    def video_with_camera_control(self, prompt: str, camera_sequence: list = None,
-                                        **kwargs) -> str:
-        """带镜头控制的视频生成
-
-        Args:
-            prompt: 视频描述文本
-            camera_sequence: 镜头序列，如 [{"action": "推进", "timing": "开始"}, {"action": "左摇", "timing": "中间"}]
-            **kwargs: 其他视频参数
-
-        Returns:
-            task_id: 视频生成任务ID
-        """
-        if camera_sequence:
-            # 将镜头序列转换为prompt中的运镜指令
-            camera_prompt = prompt
-            for i, camera in enumerate(camera_sequence):
-                action = camera.get("action", "")
-                timing = camera.get("timing", "")
-
-                # 映射自然语言到指令
-                action_map = {
-                    "左移": "左移", "右移": "右移", "左摇": "左摇", "右摇": "右摇",
-                    "推进": "推进", "拉远": "拉远", "上升": "上升", "下降": "下降",
-                    "上摇": "上摇", "下摇": "下摇", "变焦推近": "变焦推近",
-                    "变焦拉远": "变焦拉远", "晃动": "晃动", "跟随": "跟随", "固定": "固定"
-                }
-
-                instruction = action_map.get(action, action)
-                if instruction:
-                    if i == 0:
-                        camera_prompt = f"[{instruction}] " + camera_prompt
-                    else:
-                        camera_prompt += f", 然后[{instruction}]"
-
-            prompt = camera_prompt
-            self._log(f"🎥 应用镜头序列: {len(camera_sequence)}个镜头")
-
-        return self.video(prompt, **kwargs)
-
     def _process_image_input(self, image_input: str) -> str:
         """处理图片输入，支持本地路径和URL，转换为Base64或验证URL
 
@@ -2126,6 +2087,7 @@ def main():
 
     # 🎨 图像生成选项
     image_group = parser.add_argument_group('图像生成选项')
+    image_group.add_argument('--image-model', default='image-01', choices=['image-01', 'image-01-live'], help='图像生成模型，默认image-01')
     image_group.add_argument('--n', type=int, default=1, choices=range(1, 10), help='生成图片数量 (1-9)，默认1')
     image_group.add_argument('--aspect-ratio', default='1:1', choices=['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'], help='图像宽高比，默认1:1')
     image_group.add_argument('--seed', type=int, help='随机种子，相同种子生成相似图片')
@@ -2134,18 +2096,9 @@ def main():
     image_group.add_argument('--response-format', default='url', choices=['url', 'base64'], help='返回格式，默认url')
     image_group.add_argument('--prompt-optimizer', action='store_true', help='启用prompt自动优化')
     image_group.add_argument('--add-watermark', action='store_true', help='添加图片水印')
-
-    # 🎨 图像风格选项（仅image-01-live模型）
-    style_group = parser.add_argument_group('图像风格选项')
-    style_group.add_argument('--image-model', default='image-01', choices=['image-01', 'image-01-live'], help='图像生成模型，默认image-01')
-    style_group.add_argument('--style-type', choices=['漫画', '元气', '中世纪', '水彩'], help='画风风格类型，仅image-01-live模型生效')
-    style_group.add_argument('--style-weight', type=float, default=0.8, help='画风权重(0-1]，默认0.8')
-
-    # 📷 图生图选项
-    i2i_group = parser.add_argument_group('图生图选项')
-    i2i_group.add_argument('-i2i', '--image-to-image', nargs=2, metavar=('REFERENCE_IMAGE', 'PROMPT'),
-                          help='图生图: 参考图片路径/URL + 描述文本')
-    i2i_group.add_argument('--ref-image', help='参考图片路径或URL（用于图生图）')
+    image_group.add_argument('--style-type', choices=['漫画', '元气', '中世纪', '水彩'], help='画风风格类型，仅image-01-live模型生效')
+    image_group.add_argument('--style-weight', type=float, default=0.8, help='画风权重(0-1]，默认0.8')
+    image_group.add_argument('--ref-image', help='参考图片路径或URL（配合 -i 实现图生图）')
 
     # 🎭 音色管理
     voice_group = parser.add_argument_group('音色管理')
@@ -2236,7 +2189,7 @@ def main():
                            help='现有歌词文件路径（仅在edit模式下使用）')
 
     # 🎵 音乐生成选项
-    music_group = parser.add_argument_group('音乐生成')
+    music_group = parser.add_argument_group('音乐生成选项')
     music_group.add_argument('--music-model', default='music-2.5', choices=['music-2.5'], help='音乐生成模型，默认music-2.5')
     music_group.add_argument('--music-lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5: 1-3500字符]')
     music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
@@ -2262,44 +2215,14 @@ def main():
                                 ],
                                 help='视频生成模型，默认MiniMax-Hailuo-2.3')
     video_gen_group.add_argument('--video-duration', type=int, default=6, help='视频时长（秒），默认6')
-    video_gen_group.add_argument('--video-resolution', default='auto', choices=['auto', '720P', '768P', '1080P'], help='视频分辨率，默认auto（根据模型自动选择）')
-    video_gen_group.add_argument('--first-frame', help='首帧图片URL或路径（图生视频/首尾帧生成必需）')
-    video_gen_group.add_argument('--last-frame', help='尾帧图片URL或路径（首尾帧生成必需）')
-    video_gen_group.add_argument('--subject-image', help='主体参考图片URL或路径')
-    video_gen_group.add_argument('--video-name', help='视频文件名')
-
-    # 🔗 首尾帧生成专用参数
-    se_group = parser.add_argument_group('首尾帧生成选项')
-    se_group.add_argument('-se', '--start-end', nargs=2, metavar=('START_IMAGE', 'END_IMAGE'),
-                       help='首尾帧生成: 起始图片 + 结束图片')
-    se_group.add_argument('--se-duration', type=int, default=6, choices=[6, 10], help='首尾帧视频时长（秒），默认6')
-    se_group.add_argument('--se-resolution', default='768P', choices=['768P', '1080P'], help='首尾帧视频分辨率，默认768P')
-
-    # 🖼️ 图生视频专用参数
-    i2v_group = parser.add_argument_group('图生视频选项')
-    i2v_group.add_argument('-i2v', '--image-to-video', nargs=2, metavar=('IMAGE', 'PROMPT'),
-                           help='图生视频: 图片路径/URL + 描述文本')
-    i2v_group.add_argument('--i2v-model', default='I2V-01',
-                         choices=['I2V-01-Director', 'I2V-01-live', 'I2V-01',
-                                 'MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02'],
-                         help='图生视频模型，默认I2V-01')
-    i2v_group.add_argument('--i2v-duration', type=int, default=6, help='图生视频时长（秒），默认6')
-    i2v_group.add_argument('--i2v-resolution', default='auto', choices=['auto', '512P', '720P', '768P', '1080P'],
-                         help='图生视频分辨率，默认auto')
-
-    # 👤 主体参考视频生成专用参数
-    s2v_group = parser.add_argument_group('主体参考视频选项')
-    s2v_group.add_argument('-s2v', '--subject-reference', nargs=2, metavar=('SUBJECT_IMAGE', 'PROMPT'),
-                          help='主体参考视频生成: 主体图片 + 描述文本')
-    s2v_group.add_argument('--s2v-prompt-optimizer', action='store_true', help='启用prompt优化（默认启用）')
-
-    # 🎥 高级视频选项
-    video_adv_group = parser.add_argument_group('高级视频选项')
-    video_adv_group.add_argument('--no-prompt-optimizer', action='store_true', help='禁用prompt自动优化')
-    video_adv_group.add_argument('--fast-preprocessing', action='store_true', help='启用快速预处理（仅Hailuo模型）')
-    video_adv_group.add_argument('--video-watermark', action='store_true', help='添加视频水印')
-    video_adv_group.add_argument('--callback-url', help='任务状态回调URL')
-    video_adv_group.add_argument('--camera-sequence', help='镜头序列JSON，如[{"action":"推进","timing":"开始"}]')
+    video_gen_group.add_argument('--video-resolution', default='auto', choices=['auto', '720P', '768P', '1080P'], help='视频分辨率，默认auto')
+    video_gen_group.add_argument('--first-frame', help='首帧图片URL或路径（配合 -v 实现图生视频/首尾帧）')
+    video_gen_group.add_argument('--last-frame', help='尾帧图片URL或路径（配合 --first-frame 实现首尾帧生成）')
+    video_gen_group.add_argument('--subject-image', help='主体参考图片URL或路径（配合 -v 实现主体参考视频）')
+    video_gen_group.add_argument('--no-prompt-optimizer', action='store_true', help='禁用prompt自动优化')
+    video_gen_group.add_argument('--fast-preprocessing', action='store_true', help='启用快速预处理（仅Hailuo模型）')
+    video_gen_group.add_argument('--video-watermark', action='store_true', help='添加视频水印')
+    video_gen_group.add_argument('--callback-url', help='任务状态回调URL')
 
     # 📁 文件管理
     file_group = parser.add_argument_group('文件管理')
@@ -2434,50 +2357,18 @@ def main():
             print(response.get('content', ''))
         else:
             print(response)
-    elif args.image_to_image:
-        # 图生图处理
-        reference_image, prompt = args.image_to_image
-
-        result = client.image(
-            prompt=prompt,
-            model=args.image_model,
-            n=args.n,
-            aspect_ratio=args.aspect_ratio,
-            width=args.width,
-            height=args.height,
-            seed=args.seed,
-            response_format=args.response_format,
-            prompt_optimizer=args.prompt_optimizer,
-            aigc_watermark=args.add_watermark,
-            style_type=args.style_type,
-            style_weight=args.style_weight,
-            reference_image=reference_image
-        )
-
-        # 处理图生图结果
-        if result:
-            for i, item in enumerate(result):
-                if args.response_format == 'url':
-                    filepath = file_mgr.save_file(item, f"image2image_{file_mgr.generate_timestamp()}_{i+1}.jpg", "images")
-                    print(f"✅ 图生图已保存: {filepath}")
-                    print(f"🔗 图片URL: {item}")
-                    if args.play:
-                        import webbrowser
-                        webbrowser.open(item)
-                else:
-                    import base64
-                    try:
-                        image_data = base64.b64decode(item)
-                        filepath = file_mgr.get_path("images", f"image2image_{file_mgr.generate_timestamp()}_{i+1}.jpg")
-                        filepath.parent.mkdir(exist_ok=True)
-                        with open(filepath, 'wb') as f:
-                            f.write(image_data)
-                        print(f"✅ 图生图Base64已保存: {filepath}")
-                        print(f"📊 图片大小: {len(image_data)} 字节")
-                    except Exception as e:
-                        print(f"❌ Base64图片保存失败: {e}")
     elif args.image:
         prompt = file_mgr.read_input(args.image, "图像描述")
+
+        # 根据 --ref-image 判断是否为图生图
+        if args.ref_image:
+            # 图生图
+            mode_text = "图生图"
+            filename_prefix = "image2image"
+        else:
+            # 文生图
+            mode_text = "文生图"
+            filename_prefix = "image"
 
         # 使用新的图像生成参数
         result = client.image(
@@ -2500,8 +2391,8 @@ def main():
             for i, item in enumerate(result):
                 if args.response_format == 'url':
                     # URL格式：下载并保存
-                    filepath = file_mgr.save_file(item, f"image_{file_mgr.generate_timestamp()}_{i+1}.jpg", "images")
-                    print(f"✅ 图片已保存: {filepath}")
+                    filepath = file_mgr.save_file(item, f"{filename_prefix}_{file_mgr.generate_timestamp()}_{i+1}.jpg", "images")
+                    print(f"✅ {mode_text}已保存: {filepath}")
                     print(f"🔗 图片URL: {item}")
                     if args.play:
                         import webbrowser
@@ -2512,10 +2403,10 @@ def main():
                     try:
                         # 解码Base64数据
                         image_data = base64.b64decode(item)
-                        filepath = file_mgr.get_path("images", f"image_{file_mgr.generate_timestamp()}_{i+1}.jpg")
+                        filepath = file_mgr.get_path("images", f"{filename_prefix}_{file_mgr.generate_timestamp()}_{i+1}.jpg")
                         with open(filepath, 'wb') as f:
                             f.write(image_data)
-                        print(f"✅ Base64图片已保存: {filepath}")
+                        print(f"✅ {mode_text}Base64已保存: {filepath}")
                         print(f"📊 图片大小: {len(image_data)} 字节")
                     except Exception as e:
                         print(f"❌ Base64图片保存失败: {e}")
@@ -2523,142 +2414,60 @@ def main():
     elif args.video:
         prompt = file_mgr.read_input(args.video, "视频描述")
 
-        # 处理镜头序列
-        camera_sequence = None
-        if args.camera_sequence:
-            try:
-                camera_sequence = json.loads(args.camera_sequence)
-                print(f"🎥 镜头序列: {len(camera_sequence)}个镜头")
-            except json.JSONDecodeError:
-                print(f"❌ 镜头序列JSON格式错误: {args.camera_sequence}")
-
-        # 智能选择分辨率
-        resolution = args.video_resolution
-        if resolution == 'auto':
-            # 根据模型自动选择最佳分辨率
-            if args.video_model in ['T2V-01-Director', 'T2V-01', 'I2V-01-Director', 'I2V-01-live', 'I2V-01']:
-                resolution = '720P'
-            elif args.video_model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02']:
-                resolution = '768P'  # Hailuo系列默认768P以获得更好质量
-            else:
-                resolution = '720P'
-            print(f"🎯 自动选择分辨率: {resolution}")
-
-        # 检查是否使用高级视频生成参数
-        if any([args.first_frame, args.last_frame, args.subject_image, args.camera_sequence,
-                args.no_prompt_optimizer, args.fast_preprocessing, args.video_watermark,
-                args.callback_url, args.video_model != 'MiniMax-Hailuo-2.3',
-                args.video_duration != 6, args.video_resolution != 'auto', args.video_name]):
-
-            # 使用高级视频生成方法
-            task_id = client.video_advanced(
-                prompt=prompt,
-                model=args.video_model,
+        # 根据图片参数判断视频生成模式
+        if args.last_frame:
+            # 首尾帧生成
+            resolution = args.video_resolution if args.video_resolution != 'auto' else '768P'
+            task_id = client.start_end_to_video(
                 first_frame_image=args.first_frame,
                 last_frame_image=args.last_frame,
-                subject_image=args.subject_image,
+                prompt=prompt,
                 duration=args.video_duration,
                 resolution=resolution,
-                video_name=args.video_name,
                 prompt_optimizer=not args.no_prompt_optimizer,
                 aigc_watermark=args.video_watermark,
                 callback_url=args.callback_url
             )
-
-            # 如果有镜头序列，且不是主体参考视频，使用专门的镜头控制方法
-            if camera_sequence and args.video_model != 'S2V-01':
-                task_id = client.video_with_camera_control(
-                    prompt=prompt,
-                    camera_sequence=camera_sequence,
-                    model=args.video_model,
-                    duration=args.video_duration,
-                    resolution=resolution,
-                    prompt_optimizer=not args.no_prompt_optimizer,
-                    fast_pretreatment=args.fast_preprocessing,
-                    aigc_watermark=args.video_watermark,
-                    callback_url=args.callback_url
-                )
+            print(f"🔗 首尾帧视频任务已提交")
+            print(f"📊 任务ID: {task_id}")
+            print(f"🎭 使用模型: MiniMax-Hailuo-02")
+        elif args.subject_image:
+            # 主体参考视频生成
+            task_id = client.subject_reference_to_video(
+                subject_image=args.subject_image,
+                prompt=prompt,
+                prompt_optimizer=not args.no_prompt_optimizer,
+                aigc_watermark=args.video_watermark,
+                callback_url=args.callback_url
+            )
+            print(f"👤 主体参考视频任务已提交")
+            print(f"📊 任务ID: {task_id}")
+            print(f"🎭 使用模型: S2V-01")
+        elif args.first_frame:
+            # 图生视频
+            resolution = args.video_resolution if args.video_resolution != 'auto' else '720P'
+            task_id = client.image_to_video(
+                first_frame_image=args.first_frame,
+                prompt=prompt,
+                model=args.video_model,
+                duration=args.video_duration,
+                resolution=resolution,
+                prompt_optimizer=not args.no_prompt_optimizer,
+                fast_pretreatment=args.fast_preprocessing,
+                aigc_watermark=args.video_watermark,
+                callback_url=args.callback_url
+            )
+            print(f"🖼️ 图生视频任务已提交")
+            print(f"📊 任务ID: {task_id}")
+            print(f"🎭 使用模型: {args.video_model}")
         else:
-            # 使用基础视频生成（默认参数）
+            # 文生视频
             task_id = client.video(prompt, model=args.video_model)
+            print(f"🎬 文生视频任务已提交")
+            print(f"📊 任务ID: {task_id}")
+            print(f"🎭 使用模型: {args.video_model}")
 
-        print(f"🎬 视频生成任务已提交")
-        print(f"📊 任务ID: {task_id}")
-        print(f"🎭 使用模型: {args.video_model}")
         print(f"⏱️  预计3-8分钟完成，可多次查询状态")
-        print(f"💡 查询状态: python minimax_cli.py -s {task_id}")
-    elif args.image_to_video:
-        # 图生视频处理
-        image_path, prompt = args.image_to_video
-
-        # 智能选择分辨率
-        i2v_resolution = args.i2v_resolution
-        if i2v_resolution == 'auto':
-            if args.i2v_model in ['I2V-01-Director', 'I2V-01-live', 'I2V-01']:
-                i2v_resolution = '720P'
-            elif args.i2v_model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02']:
-                i2v_resolution = '768P'  # Hailuo系列默认768P以获得更好质量
-            else:
-                i2v_resolution = '720P'
-            print(f"🎯 自动选择分辨率: {i2v_resolution}")
-
-        task_id = client.image_to_video(
-            first_frame_image=image_path,
-            prompt=prompt,
-            model=args.i2v_model,
-            duration=args.i2v_duration,
-            resolution=i2v_resolution,
-            prompt_optimizer=not args.no_prompt_optimizer,
-            fast_pretreatment=args.fast_preprocessing,
-            aigc_watermark=args.video_watermark,
-            callback_url=args.callback_url
-        )
-
-        print(f"🖼️ 图生视频任务已提交")
-        print(f"📊 任务ID: {task_id}")
-        print(f"🎭 使用模型: {args.i2v_model}")
-        print(f"📷 图片: {image_path}")
-        print(f"⏱️  预计3-8分钟完成，可多次查询状态")
-        print(f"💡 查询状态: python minimax_cli.py -s {task_id}")
-    elif args.subject_reference:
-        # 主体参考视频生成处理
-        subject_image, prompt = args.subject_reference
-
-        task_id = client.subject_reference_to_video(
-            subject_image=subject_image,
-            prompt=prompt,
-            prompt_optimizer=not args.no_prompt_optimizer,
-            aigc_watermark=args.video_watermark,
-            callback_url=args.callback_url
-        )
-
-        print(f"👤 主体参考视频任务已提交")
-        print(f"📊 任务ID: {task_id}")
-        print(f"🎭 使用模型: S2V-01")
-        print(f"👤 主体图片: {subject_image}")
-        print(f"📝 视频描述: {prompt}")
-        print(f"💡 查询状态: python minimax_cli.py -s {task_id}")
-    elif args.start_end:
-        # 首尾帧生成处理
-        start_image, end_image = args.start_end
-
-        task_id = client.start_end_to_video(
-            first_frame_image=start_image,
-            last_frame_image=end_image,
-            duration=args.se_duration,
-            resolution=args.se_resolution,
-            prompt_optimizer=not args.no_prompt_optimizer,
-            aigc_watermark=args.video_watermark,
-            callback_url=args.callback_url
-        )
-
-        print(f"🔗 首尾帧视频任务已提交")
-        print(f"📊 任务ID: {task_id}")
-        print(f"🎭 使用模型: MiniMax-Hailuo-02")
-        print(f"📷 起始图片: {start_image}")
-        print(f"📷 结束图片: {end_image}")
-        print(f"⏱️  时长: {args.se_duration}秒")
-        print(f"📐 分辨率: {args.se_resolution}")
         print(f"💡 查询状态: python minimax_cli.py -s {task_id}")
     elif args.music:
         # 处理文件路径或文本内容
