@@ -113,7 +113,8 @@ class MiniMaxClient:
              # M2-her 专属参数（暂时注释，等待 API BUG 修复）
              # user_system: str = None, group: str = None,
              # sample_user: str = None, sample_ai: str = None,
-             temperature: float = 1.0, max_tokens: int = 2048, stream: bool = False,
+             temperature: float = 1.0, top_p: float = 1.0,
+             max_tokens: int = 2048, stream: bool = False,
              use_anthropic_api: bool = False, show_thinking: bool = False) -> str:
         """智能对话（支持 M2-her 和 Anthropic API 兼容接口）
 
@@ -127,6 +128,7 @@ class MiniMaxClient:
             # sample_user: 示例用户消息（引导模型理解期望的对话风格）
             # sample_ai: 示例 AI 回复（配合 sample_user 使用）
             temperature: 温度参数 (0.0, 1.0]，推荐 1.0
+            top_p: 核采样参数 (0.0, 1.0]，推荐 1.0
             max_tokens: 最大生成 token 数，M2-her 上限为 2048
             stream: 是否使用流式响应
             use_anthropic_api: 是否使用 Anthropic API 兼容接口
@@ -146,7 +148,7 @@ class MiniMaxClient:
 
         # 选择 API 端点
         if use_anthropic_api:
-            endpoint = "anthropic/v1/messages"
+            endpoint = "v1/messages"
             base_url = "https://api.minimaxi.com/anthropic"
             self._log(f"🤖 使用 Anthropic API 兼容接口 (模型: {model})")
         else:
@@ -220,6 +222,8 @@ class MiniMaxClient:
             # 通用参数
             if temperature is not None:
                 data["temperature"] = temperature
+            if top_p is not None:
+                data["top_p"] = top_p
             if stream:
                 data["stream"] = True
 
@@ -2115,6 +2119,8 @@ def main():
     #                        help='示例AI回复（配合--sample-user使用，M2-her专属）')
     chat_group.add_argument('--temperature', type=float, default=1.0,
                            help='温度参数 (0.0-1.0]，默认1.0')
+    chat_group.add_argument('--top-p', type=float, default=1.0,
+                           help='核采样参数 (0.0-1.0]，默认1.0')
     chat_group.add_argument('--max-tokens', type=int, default=1024,
                            help='最大生成token数，M2-her上限2048，默认1024')
 
@@ -2414,6 +2420,7 @@ def main():
             # sample_user=args.sample_user,
             # sample_ai=args.sample_ai,
             temperature=args.temperature,
+            top_p=args.top_p,
             max_tokens=args.max_tokens,
             use_anthropic_api=args.anthropic_api,
             show_thinking=args.show_thinking
