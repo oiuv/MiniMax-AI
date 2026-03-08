@@ -72,43 +72,49 @@ class MiniMaxClient:
     
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """统一请求"""
-        url = f"{self.base_url}/{endpoint}"
+        # 检测是否是 Anthropic API 端点
+        if endpoint.startswith("v1/messages"):
+            url = f"https://api.minimaxi.com/anthropic/{endpoint}"
+        else:
+            url = f"{self.base_url}/{endpoint}"
+
         if any(k in endpoint for k in ['t2a_v2', 'voice_clone', 'music_generation']):
             url += f"?GroupId={self.group_id}"
-        
+
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
-        
+
         self._log_request(method, endpoint, kwargs.get('json'))
-        
+
         for attempt in range(3):
             try:
                 response = requests.request(method, url, headers=headers, **kwargs)
                 response.raise_for_status()
                 result = response.json()
-                
+
                 self._log(f"📥 响应状态: {response.status_code}")
-                
+
+                # Anthropic API 响应格式不同，不需要检查 base_resp
                 if 'base_resp' in result and result['base_resp']['status_code'] != 0:
                     self._log(f"⚠️ API错误: {result['base_resp']['status_msg']}", "ERROR")
                     if result['base_resp']['status_code'] == 1002 and attempt < 2:
                         time.sleep(2 * (attempt + 1))
                         continue
                     raise Exception(f"API错误: {result['base_resp']['status_msg']}")
-                
+
                 self._log(f"✅ 请求成功")
                 return result
-                
+
             except Exception as e:
                 if attempt == 2:
                     self._log(f"❌ 请求失败: {e}", "ERROR")
-                    sys.exit(1)
+                    raise  # 抛出异常而不是退出，让上层处理
                 self._log(f"🔄 重试第{attempt+1}次...", "WARN")
                 time.sleep(1)
     
-    def chat(self, message: str, model: str = "MiniMax-M2.1",
+    def chat(self, message: str, model: str = "MiniMax-M2.5",
              system_prompt: str = None,
              # M2-her 专属参数（暂时注释，等待 API BUG 修复）
              # user_system: str = None, group: str = None,
@@ -120,7 +126,7 @@ class MiniMaxClient:
 
         Args:
             message: 用户消息内容
-            model: 模型名称，可选值：M2-her, MiniMax-M2.1, MiniMax-M2.1-lightning, MiniMax-M2
+            model: 模型名称，可选值：M2-her, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.1, MiniMax-M2.1-highspeed, MiniMax-M2
             system_prompt: 系统提示词（定义 AI 的角色和行为）
             # M2-her 专属参数（暂时注释）
             # user_system: 用户角色设定（用于角色扮演场景定义用户身份）
@@ -139,8 +145,11 @@ class MiniMaxClient:
         """
         # 模型映射：M2-her 为对话模型，MiniMax-M2 系列为文本生成模型
         model_mapping = {
+            "MiniMax-M2.5": "MiniMax-M2.5",
+            "MiniMax-M2.5-highspeed": "MiniMax-M2.5-highspeed",
             "MiniMax-M2.1": "MiniMax-M2.1",
-            "MiniMax-M2.1-lightning": "MiniMax-M2.1-lightning",
+            "MiniMax-M2.1-highspeed": "MiniMax-M2.1-highspeed",
+            "MiniMax-M2.1-lightning": "MiniMax-M2.1-highspeed",  # 兼容旧名称
             "MiniMax-M2": "MiniMax-M2",
             "M2-her": "M2-her"
         }
@@ -968,23 +977,28 @@ class MiniMaxClient:
     def music(self, prompt: str = None, lyrics: str = None, stream: bool = False,
                 output_format: str = "hex", sample_rate: int = 44100,
                 bitrate: int = 256000, format: str = "mp3",
-                aigc_watermark: bool = False, model: str = "music-2.5") -> str:
-        """音乐生成 (music-2.5)
+                aigc_watermark: bool = False, model: str = "music-2.5+",
+                is_instrumental: bool = False, lyrics_optimizer: bool = False) -> str:
+        """音乐生成 (music-2.5+ / music-2.5)
 
         Args:
             prompt: 音乐描述，用于指定风格、情绪和场景
-                    - music-2.5: 可选，[0, 2000]字符
-                    - 旧模型: 必填，[10, 2000]字符
+                    - music-2.5+ 纯音乐: 必填 [1, 2000]字符
+                    - music-2.5+ 非纯音乐: 可选 [0, 2000]字符
+                    - music-2.5: 可选 [0, 2000]字符
             lyrics: 歌词内容，支持结构标签
-                    - music-2.5: [1, 3500]字符（必填）
-                    - 旧模型: [10, 3500]字符
+                    - music-2.5+ 纯音乐: 非必填
+                    - music-2.5+ 非纯音乐: 必填 [1, 3500]字符
+                    - music-2.5: 必填 [1, 3500]字符
             stream: 是否使用流式传输，默认false
             output_format: 音频返回格式，可选url/hex，默认hex
             sample_rate: 采样率，可选16000/24000/32000/44100，默认44100
             bitrate: 比特率，可选32000/64000/128000/256000，默认256000
             format: 音频编码格式，可选mp3/wav/pcm，默认mp3
             aigc_watermark: 是否在音频末尾添加水印，默认false（仅非流式生效）
-            model: 音乐生成模型，默认music-2.5
+            model: 音乐生成模型，默认music-2.5+（推荐）
+            is_instrumental: 是否生成纯音乐（无人声），仅music-2.5+支持，默认false
+            lyrics_optimizer: 是否根据prompt自动生成歌词，默认false
 
         Returns:
             音频数据（hex编码或URL）
@@ -993,25 +1007,57 @@ class MiniMaxClient:
         import sys
 
         lyrics = lyrics.strip() if lyrics else ""
+        prompt = prompt.strip() if prompt else ""
 
         # 模型特定的参数验证
+        is_music_25_plus = model == "music-2.5+"
         is_music_25 = model == "music-2.5"
 
-        if is_music_25:
-            # music-2.5: prompt可选 [0, 2000], lyrics必填 [1, 3500]
-            if prompt:
-                prompt = prompt.strip()
+        if is_music_25_plus:
+            if is_instrumental:
+                # music-2.5+ 纯音乐: prompt必填 [1, 2000], lyrics可选
+                if not prompt:
+                    print(f"❌ 纯音乐模式下，音乐描述(prompt)为必填参数")
+                    print(f"💡 music-2.5+ 纯音乐: prompt长度限制[1, 2000]字符")
+                    print(f"📝 示例: '独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆'")
+                    sys.exit(1)
                 if len(prompt) > 2000:
                     print(f"❌ prompt过长 ({len(prompt)}字符)")
-                    print(f"💡 music-2.5模型: prompt长度限制[0, 2000]字符")
+                    print(f"💡 music-2.5+ 纯音乐: prompt长度限制[1, 2000]字符")
                     sys.exit(1)
             else:
-                prompt = ""
+                # music-2.5+ 非纯音乐: prompt可选 [0, 2000], lyrics必填 [1, 3500]
+                if prompt and len(prompt) > 2000:
+                    print(f"❌ prompt过长 ({len(prompt)}字符)")
+                    print(f"💡 music-2.5+: prompt长度限制[0, 2000]字符")
+                    sys.exit(1)
+
+                if not lyrics and not lyrics_optimizer:
+                    print(f"❌ 歌词为必填参数（除非启用自动生成歌词）")
+                    print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
+                    print(f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'")
+                    sys.exit(1)
+
+                if lyrics:
+                    if len(lyrics) < 1:
+                        print(f"❌ 歌词过短 ({len(lyrics)}字符)")
+                        print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
+                        sys.exit(1)
+                    if len(lyrics) > 3500:
+                        print(f"❌ 歌词过长 ({len(lyrics)}字符)")
+                        print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
+                        sys.exit(1)
+        elif is_music_25:
+            # music-2.5: prompt可选 [0, 2000], lyrics必填 [1, 3500]
+            if prompt and len(prompt) > 2000:
+                print(f"❌ prompt过长 ({len(prompt)}字符)")
+                print(f"💡 music-2.5: prompt长度限制[0, 2000]字符")
+                sys.exit(1)
 
             if not lyrics:
                 print(f"❌ 歌词为必填参数")
                 print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
-                print(f"📝 示例: '[Verse]\n街灯微亮晚风轻抚\n[Chorus]\n推开木门香气弥漫'")
+                print(f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'")
                 sys.exit(1)
 
             if len(lyrics) < 1:
@@ -1026,7 +1072,7 @@ class MiniMaxClient:
         else:
             # 旧模型: prompt必填 [10, 2000], lyrics [10, 3500]
             if not prompt:
-                print(f"❌ prompt为必填参数（非music-2.5模型）")
+                print(f"❌ prompt为必填参数（非music-2.5+模型）")
                 print(f"💡 旧模型: prompt长度限制[10, 2000]字符")
                 print(f"📝 示例: '独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆'")
                 sys.exit(1)
@@ -1046,7 +1092,7 @@ class MiniMaxClient:
             if not lyrics or len(lyrics) < 10:
                 print(f"❌ 歌词为必填参数")
                 print(f"💡 旧模型: 歌词长度限制[10, 3500]字符")
-                print(f"📝 示例: '[Verse]\n街灯微亮晚风轻抚\n[Chorus]\n推开木门香气弥漫'")
+                print(f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'")
                 sys.exit(1)
 
             if len(lyrics) > 3500:
@@ -1082,7 +1128,6 @@ class MiniMaxClient:
 
         data = {
             "model": model,
-            "lyrics": lyrics,
             "stream": stream,
             "output_format": output_format,
             "audio_setting": {
@@ -1092,17 +1137,32 @@ class MiniMaxClient:
             }
         }
 
-        # music-2.5中prompt是可选的
+        # 添加可选参数
         if prompt:
             data["prompt"] = prompt
+        if lyrics:
+            data["lyrics"] = lyrics
+
+        # music-2.5+ 特有参数
+        if is_music_25_plus:
+            if is_instrumental:
+                data["is_instrumental"] = True
+            if lyrics_optimizer:
+                data["lyrics_optimizer"] = True
 
         # 仅在非流式时添加水印
         if not stream and aigc_watermark:
             data["aigc_watermark"] = True
 
         self._log(f"📋 使用模型: {model}")
-        self._log(f"🎵 音乐描述: {prompt[:100] + '...' if len(prompt) > 100 else prompt}")
-        self._log(f"🎤 歌词长度: {len(lyrics)}字符")
+        if is_instrumental:
+            self._log(f"🎼 生成类型: 纯音乐（无人声）")
+        if prompt:
+            self._log(f"🎵 音乐描述: {prompt[:100] + '...' if len(prompt) > 100 else prompt}")
+        if lyrics:
+            self._log(f"🎤 歌词长度: {len(lyrics)}字符")
+        if lyrics_optimizer:
+            self._log(f"🤖 自动生成歌词: 已启用")
         self._log(f"📊 音频设置: {format}, {sample_rate}Hz, {bitrate//1000}kbps")
         self._log(f"🌊 流式传输: {'是' if stream else '否'}")
         self._log(f"🔗 返回格式: {output_format}")
@@ -2061,9 +2121,9 @@ def main():
 
     # 🤖 文本生成/对话选项
     chat_group = parser.add_argument_group('文本生成/对话选项')
-    chat_group.add_argument('--chat-model', default='MiniMax-M2.1',
-                           choices=['M2-her', 'MiniMax-M2.1', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
-                           help='模型选择：M2-her=对话/角色扮演, MiniMax-M2系列=编程/Agent工作流（需配合--anthropic-api）')
+    chat_group.add_argument('--chat-model', default='MiniMax-M2.5',
+                           choices=['M2-her', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.1', 'MiniMax-M2.1-highspeed', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
+                           help='模型选择：M2-her=对话/角色扮演, MiniMax-M2.5=顶尖性能(60 TPS), M2.5-highspeed=极速版(100 TPS), M2系列=编程/Agent工作流（需配合--anthropic-api）')
     chat_group.add_argument('--anthropic-api', action='store_true',
                            help='使用 Anthropic API 兼容接口（推荐用于 MiniMax-M2 系列，支持思考过程显示）')
     chat_group.add_argument('--show-thinking', action='store_true',
@@ -2190,8 +2250,10 @@ def main():
 
     # 🎵 音乐生成选项
     music_group = parser.add_argument_group('音乐生成选项')
-    music_group.add_argument('--music-model', default='music-2.5', choices=['music-2.5'], help='音乐生成模型，默认music-2.5')
-    music_group.add_argument('--music-lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5: 1-3500字符]')
+    music_group.add_argument('--music-model', default='music-2.5+', choices=['music-2.5+', 'music-2.5'], help='音乐生成模型，默认music-2.5+（推荐）')
+    music_group.add_argument('--music-lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5+: 可选（纯音乐模式）或1-3500字符，music-2.5: 1-3500字符]')
+    music_group.add_argument('--instrumental', action='store_true', help='生成纯音乐（无人声），仅music-2.5+支持')
+    music_group.add_argument('--lyrics-optimizer', action='store_true', help='根据prompt描述自动生成歌词，仅music-2.5+支持')
     music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
     music_group.add_argument('--music-format', default='hex', choices=['hex', 'url'], help='音频返回格式，默认hex')
     music_group.add_argument('--music-sample-rate', type=int, default=44100, choices=[16000, 24000, 32000, 44100], help='音频采样率，默认44100')
@@ -2492,7 +2554,9 @@ def main():
             bitrate=args.music_bitrate,
             format=args.music_encoding,
             aigc_watermark=args.music_watermark,
-            model=args.music_model
+            model=args.music_model,
+            is_instrumental=args.instrumental,
+            lyrics_optimizer=args.lyrics_optimizer
         )
 
         if audio:
