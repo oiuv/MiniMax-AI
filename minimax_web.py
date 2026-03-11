@@ -639,6 +639,22 @@ def create_audio_tab():
                             placeholder="输入要转换为语音的文本...",
                             lines=4
                         )
+                        # 加载音色列表
+                        def load_voices():
+                            try:
+                                result = client.list_voices("system")
+                                voices = result.get('voices', [])
+                                if voices:
+                                    choices = [v['voice_id'] for v in voices]
+                                    return gr.Dropdown(choices=choices, value=choices[0])
+                                else:
+                                    # 默认音色列表
+                                    default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
+                                    return gr.Dropdown(choices=default_voices, value="female-chengshu")
+                            except:
+                                default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
+                                return gr.Dropdown(choices=default_voices, value="female-chengshu")
+
                         voice = gr.Dropdown(label="音色", choices=[])
                         tts_model = gr.Dropdown(
                             choices=["speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo", "speech-02-hd", "speech-02-turbo"],
@@ -661,14 +677,25 @@ def create_audio_tab():
                         tts_status = gr.Textbox(label="状态")
                         tts_audio = gr.Audio(label="生成结果", type="filepath")
 
+                # 页面加载时加载音色列表
                 def load_voices():
-                    """加载音色列表"""
                     try:
-                        result = client.list_voices("all")
+                        result = client.list_voices("system")
                         voices = result.get('voices', [])
-                        return gr.Dropdown(choices=[v['voice_id'] for v in voices], value=voices[0]['voice_id'] if voices else None)
+                        if voices:
+                            choices = [v['voice_id'] for v in voices]
+                            return gr.Dropdown(choices=choices, value=choices[0])
+                        else:
+                            # 默认音色列表
+                            default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
+                            return gr.Dropdown(choices=default_voices, value="female-chengshu")
                     except:
-                        return gr.Dropdown(choices=["female-chengshu", "male-chengshu", "female-yujie", "male-yujie"], value="female-chengshu")
+                        default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
+                        return gr.Dropdown(choices=default_voices, value="female-chengshu")
+
+                # 初始化音色列表
+                voice.choices = load_voices().choices
+                voice.value = load_voices().value
 
                 def generate_tts(text, voice, model, emotion, speed, vol, pitch):
                     if not text.strip():
@@ -746,18 +773,27 @@ def create_podcast_tab():
                 yield "📝 正在生成对话脚本...", None
 
                 # 使用 chat 方法生成对话
-                system_prompt = """你是一个播客生成助手。请生成一个关于用户主题的播客对话。
-输出格式为JSON数组，每个元素包含：speaker（说话人）、text（内容）、voice_id（音色ID）、emotion（情感）。"""
+                system_prompt = """你是一个专业的播客制作助手。请生成一个自然流畅的双人对话播客，围绕用户提供的主题展开。
+对话要求：
+1. 包含两位主播：主持人（活泼开朗，引导话题）和嘉宾（专业人士，分享观点）
+2. 对话形式自然，有互动和讨论，不是单方面讲解
+3. 总长度控制在10-15轮对话
+4. 输出严格为JSON数组，每个元素包含：
+   - speaker: "主持人"或"嘉宾"
+   - text: 对话内容（口语化，自然）
+   - voice_id: 主持人用"female-tianmei"（甜美女声），嘉宾用"male-chengshu"（成熟男声）
+   - emotion: 根据内容选择合适的情感，如happy、calm、excited等"""
 
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"请生成关于\"{topic}\"的播客对话，欢迎语为：{welcome_text}"}
+                    {"role": "user", "content": f"请生成关于\"{topic}\"的播客对话，开头必须包含欢迎语：{welcome_text}"}
                 ]
 
                 response = client._request("POST", "text/chatcompletion_v2", json={
-                    "model": "MiniMax-M2.1",
+                    "model": "MiniMax-M2.5",
                     "messages": messages,
-                    "temperature": 0.8
+                    "temperature": 0.8,
+                    "max_completion_tokens": 2048
                 })
 
                 dialogue_text = response['choices'][0]['message']['content']
@@ -831,14 +867,24 @@ def create_file_tab():
             )
             refresh_btn = gr.Button("🔄 刷新列表")
 
+        # 存储完整文件列表数据
+        files_state = gr.State([])
+
         file_table = gr.Dataframe(
             headers=["ID", "文件名", "用途", "大小", "创建时间"],
-            label="文件列表"
+            label="文件列表",
+            interactive=False  # 设为只读，避免误编辑
         )
 
         with gr.Row():
             upload_file = gr.File(label="上传文件")
             upload_btn = gr.Button("⬆️ 上传", variant="primary")
+            download_file_id = gr.Textbox(label="下载/删除文件ID", placeholder="输入文件ID或点击列表中的ID...", lines=1)
+            download_btn = gr.Button("⬇️ 下载", variant="secondary")
+            delete_btn = gr.Button("🗑️ 删除", variant="stop")
+
+        download_status = gr.Textbox(label="下载状态", interactive=False)
+        download_result = gr.File(label="下载结果")
 
         def refresh_files(purpose):
             try:
@@ -850,29 +896,80 @@ def create_file_tab():
                     created_at = f.get('created_at', 0)
                     created_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else ''
                     data.append([
-                        f.get('file_id', ''),
+                        str(f.get('file_id', '')),  # 确保ID是字符串
                         f.get('filename', ''),
                         f.get('purpose', ''),
                         f"{f.get('bytes', 0) / 1024:.1f} KB",
                         created_str
                     ])
 
-                return data if data else [["", "暂无文件", "", "", ""]]
+                table_data = data if data else [["", "暂无文件", "", "", ""]]
+                return table_data, data  # 同时返回表格显示数据和完整数据
             except Exception as e:
-                return [["", f"错误: {str(e)}", "", "", ""]]
+                error_data = [["", f"错误: {str(e)}", "", "", ""]]
+                return error_data, error_data
 
         def upload_new_file(file_obj, purpose):
             if not file_obj:
-                return [["", "请选择文件", "", "", ""]]
+                error_data = [["", "请选择文件", "", "", ""]]
+                return error_data, error_data
 
             try:
                 result = client.upload_file(file_obj, purpose)
                 return refresh_files(purpose)
             except Exception as e:
-                return [["", f"上传失败: {str(e)}", "", "", ""]]
+                error_data = [["", f"上传失败: {str(e)}", "", "", ""]]
+                return error_data, error_data
 
-        refresh_btn.click(refresh_files, inputs=[file_purpose], outputs=[file_table])
-        upload_btn.click(upload_new_file, inputs=[upload_file, file_purpose], outputs=[file_table])
+        def download_file(file_id):
+            if not file_id.strip():
+                return "请输入文件ID", None
+
+            try:
+                # 调用下载方法
+                filepath = client.download_file(file_id.strip())
+                if Path(filepath).exists():
+                    return f"✅ 文件下载成功: {filepath}", filepath
+                else:
+                    return "❌ 下载失败: 文件不存在", None
+            except Exception as e:
+                return f"❌ 下载失败: {str(e)}", None
+
+        def delete_file(file_id, purpose):
+            if not file_id.strip():
+                table_data, files_data = refresh_files(purpose)
+                return "请输入文件ID", table_data, files_data
+
+            try:
+                # 调用删除方法
+                result = client.delete_file(file_id.strip(), purpose)
+                if 'base_resp' in result and result['base_resp']['status_code'] == 0:
+                    table_data, files_data = refresh_files(purpose)
+                    return f"✅ 文件 {file_id} 删除成功", table_data, files_data
+                else:
+                    error_msg = result.get('base_resp', {}).get('status_msg', '未知错误')
+                    table_data, files_data = refresh_files(purpose)
+                    return f"❌ 删除失败: {error_msg}", table_data, files_data
+            except Exception as e:
+                table_data, files_data = refresh_files(purpose)
+                return f"❌ 删除失败: {str(e)}", table_data, files_data
+
+        # 点击表格行任意位置自动填充该文件的ID
+        def on_select_file(selected_data: gr.SelectData, files_data):
+            # 获取选中行的索引
+            if selected_data.index is not None and files_data:
+                row_index = selected_data.index[0]
+                if 0 <= row_index < len(files_data):
+                    # 返回该行第一列的文件ID
+                    return files_data[row_index][0]
+            return ""
+
+        file_table.select(on_select_file, inputs=[files_state], outputs=[download_file_id])
+
+        refresh_btn.click(refresh_files, inputs=[file_purpose], outputs=[file_table, files_state])
+        upload_btn.click(upload_new_file, inputs=[upload_file, file_purpose], outputs=[file_table, files_state])
+        download_btn.click(download_file, inputs=[download_file_id], outputs=[download_status, download_result])
+        delete_btn.click(delete_file, inputs=[download_file_id, file_purpose], outputs=[download_status, file_table, files_state])
 
         # 初始加载
         # file_table.value = refresh_files("voice_clone")
@@ -893,28 +990,53 @@ def create_voice_tab():
                 )
                 refresh_voice_btn = gr.Button("🔄 刷新列表")
                 voice_list = gr.Dataframe(
-                    headers=["ID", "名称", "类型"],
+                    headers=["ID", "名称", "类型", "描述"],
                     label="可用音色"
                 )
 
                 def refresh_voices(vtype):
                     try:
                         result = client.list_voices(vtype)
-                        voices = result.get('voices', [])
-
                         data = []
-                        for v in voices:
-                            data.append([
-                                v.get('voice_id', ''),
-                                v.get('name', v.get('voice_id', '')),
-                                v.get('type', 'system')
-                            ])
 
-                        return data if data else [["", "暂无音色", ""]]
+                        # 按类型获取音色列表
+                        type_mapping = {
+                            'all': ['system_voice', 'voice_cloning', 'voice_generation', 'music_generation'],
+                            'system': ['system_voice'],
+                            'cloning': ['voice_cloning'],
+                            'generation': ['voice_generation']
+                        }
+
+                        target_types = type_mapping.get(vtype, ['system_voice'])
+
+                        for t in target_types:
+                            if t in result:
+                                for v in result[t]:
+                                    voice_type = t.replace('_voice', '').replace('voice_', '')
+                                    # 提取描述信息
+                                    desc = v.get('desc', v.get('description', v.get('remarks', '')))
+                                    if isinstance(desc, list):
+                                        desc = ' '.join(desc)
+                                    data.append([
+                                        v.get('voice_id', ''),
+                                        v.get('name', v.get('voice_name', v.get('voice_id', ''))),
+                                        voice_type,
+                                        desc
+                                    ])
+
+                        return data if data else [["", "暂无音色", "", ""]]
                     except Exception as e:
-                        return [["", f"错误: {str(e)}", ""]]
+                        return [["", f"错误: {str(e)}", "", ""]]
 
                 refresh_voice_btn.click(refresh_voices, inputs=[voice_type], outputs=[voice_list])
+
+                # 保存刷新函数到全局，方便页面加载时调用
+                global refresh_voices_global
+                refresh_voices_global = refresh_voices
+                global voice_type_global
+                voice_type_global = voice_type
+                global voice_list_global
+                voice_list_global = voice_list
 
             with gr.TabItem("🎤 克隆音色"):
                 with gr.Row():
@@ -1008,7 +1130,8 @@ def create_app():
     connected, msg = init_client()
 
     with gr.Blocks(
-        title="MiniMax AI 创意工作室"
+        title="MiniMax AI 创意工作室",
+        fill_width=True
     ) as app:
         # 头部
         gr.Markdown("# 🎨 MiniMax AI 创意工作室")
@@ -1036,6 +1159,26 @@ def create_app():
             create_file_tab()
             create_voice_tab()
 
+        # 页面加载事件
+        def on_load():
+            # 初始化音色列表
+            try:
+                if client:
+                    result = client.list_voices("all")
+                    voices = result.get('voices', [])
+                    data = []
+                    for v in voices:
+                        data.append([
+                            v.get('voice_id', ''),
+                            v.get('name', v.get('voice_id', '')),
+                            v.get('type', 'system')
+                        ])
+                    return data if data else [["", "暂无音色", ""]]
+            except:
+                return [["", "加载失败", ""]]
+
+        app.load(on_load, outputs=[voice_list_global])
+
         # 底部
         gr.Markdown("---")
         gr.Markdown("Made with ❤️ using Gradio & MiniMax API")
@@ -1059,10 +1202,5 @@ if __name__ == "__main__":
         server_port=args.port,
         share=args.share,
         show_error=True,
-        theme=gr.themes.Soft(),
-        css="""
-        .gradio-container {
-            max-width: 1400px !important;
-        }
-        """
+        theme=gr.themes.Soft()
     )

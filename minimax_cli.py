@@ -1446,7 +1446,9 @@ class MiniMaxClient:
                 raise Exception(f"获取文件信息失败: {file_info['error']}")
 
             file_data = file_info.get('file', {})
-            filename = file_data.get('filename', f'file_{file_id}')
+            original_filename = file_data.get('filename', f'file_{file_id}')
+            # 使用 文件ID_原文件名 格式避免覆盖
+            filename = f"{file_id}_{original_filename}"
 
             # 构建下载URL
             params = {'file_id': file_id}
@@ -1460,7 +1462,7 @@ class MiniMaxClient:
 
             # 确定保存路径
             if save_path is None:
-                output_dir = self.base_dir / "downloads"
+                output_dir = Path('./output/downloads')
                 output_dir.mkdir(parents=True, exist_ok=True)
                 save_path = output_dir / filename
             else:
@@ -1482,7 +1484,7 @@ class MiniMaxClient:
         except Exception as e:
             error_msg = f"文件下载失败: {str(e)}"
             self._log(error_msg)
-            return error_msg
+            raise Exception(error_msg)
 
     def delete_file(self, file_id: str, purpose: str) -> Dict[str, Any]:
         """
@@ -1501,8 +1503,16 @@ class MiniMaxClient:
             if purpose not in valid_purposes:
                 raise ValueError(f"无效的purpose: {purpose}，可选值: {valid_purposes}")
 
+            # 文件ID需要转换为整数
+            try:
+                file_id_int = int(file_id)
+            except:
+                raise ValueError(f"无效的文件ID: {file_id}，必须是整数")
+
+            # 删除接口需要使用 multipart/form-data 格式
+            # 删除接口需要使用 multipart/form-data 格式
             data = {
-                'file_id': file_id,
+                'file_id': file_id_int,
                 'purpose': purpose
             }
 
@@ -1854,7 +1864,17 @@ class MiniMaxClient:
                     pass
             
             self._log(f"❌ 获取音色列表失败: {e}", "ERROR")
-            return {}
+            # 返回默认音色列表，确保UI正常显示
+            return {
+                "voices": [
+                    {"voice_id": "female-chengshu", "name": "成熟女声", "type": "system"},
+                    {"voice_id": "male-chengshu", "name": "成熟男声", "type": "system"},
+                    {"voice_id": "female-yujie", "name": "御姐女声", "type": "system"},
+                    {"voice_id": "male-yujie", "name": "磁性男声", "type": "system"},
+                    {"voice_id": "female-tianmei", "name": "甜美女声", "type": "system"},
+                    {"voice_id": "male-ketang", "name": "课堂男声", "type": "system"}
+                ]
+            }
 
     def voice_clone(self, file_id: int, voice_id: str,
                    prompt_audio: int = None, prompt_text: str = None,
