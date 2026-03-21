@@ -511,6 +511,8 @@
             userInput.value = '';
             userInput.style.height = 'auto';
             
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            
             isStreaming = true;
             sendBtn.disabled = true;
             
