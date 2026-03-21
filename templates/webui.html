@@ -100,7 +100,7 @@
         }
         
         .new-chat-btn {
-            margin: auto 20px 20px;
+                margin: auto 20px 20px;
             padding: 12px;
             background: var(--accent);
             border: none;
@@ -108,7 +108,7 @@
             color: white;
             cursor: pointer;
             font-weight: 600;
-            transition: background 0.2s;
+                transition: background 0.2s;
         }
         
         .new-chat-btn:hover { background: var(--accent-hover); }
@@ -422,7 +422,7 @@
             return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         }
         
-        function addMessage(role, content, thinkingContent = null) {
+        function addMessage(role, content) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
             
@@ -432,25 +432,14 @@
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            
-            if (thinkingContent) {
-                const thinkingBlock = document.createElement('div');
-                thinkingBlock.className = 'thinking-block';
-                thinkingBlock.innerHTML = `<div class="thinking-label">💭 思考过程</div><div class="thinking-text">${escapeHtml(thinkingContent)}</div>`;
-                contentDiv.appendChild(thinkingBlock);
-            }
-            
-            const textDiv = document.createElement('div');
-            textDiv.className = 'message-text';
-            textDiv.innerHTML = formatContent(content);
-            contentDiv.appendChild(textDiv);
+            contentDiv.innerHTML = formatContent(content);
             
             messageDiv.appendChild(avatar);
             messageDiv.appendChild(contentDiv);
             chatMessages.appendChild(messageDiv);
             
             chatMessages.scrollTop = chatMessages.scrollHeight;
-            return textDiv;
+            return contentDiv;
         }
         
         function addTypingIndicator() {
@@ -497,74 +486,79 @@
             return formatted;
         }
         
-        async function sendChatMessage() {
+        function sendChatMessage() {
             const message = userInput.value.trim();
             if (!message || isStreaming) return;
             
+            // 1. 立即显示用户消息
+            addMessage('user', message);
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            
+            // 2. 设置状态
+            isStreaming = true;
+            sendBtn.disabled = true;
+            
+            // 3. 异步发送请求（不阻塞）
             const model = modelSelect.value;
             const temperature = parseFloat(document.getElementById('temperature').value);
             const maxTokens = parseInt(document.getElementById('max-tokens').value);
             const systemPrompt = document.getElementById('system-prompt').value;
             const showThinking = document.getElementById('show-thinking').checked;
             
-            addMessage('user', message);
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            
-            await new Promise(resolve => requestAnimationFrame(resolve));
-            
-            isStreaming = true;
-            sendBtn.disabled = true;
-            
-            const contentDiv = addTypingIndicator();
+            // 4. 显示 AI 正在输入指示器
+            const aiContentDiv = addTypingIndicator();
             let fullContent = '';
             let thinkingContent = '';
             let textDiv = null;
             
-            try {
-                const endpoint = showThinking ? '/api/chat/anthropic' : '/api/chat';
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message,
-                        model,
-                        temperature,
-                        max_tokens: maxTokens,
-                        system_prompt: systemPrompt,
-                        session_id: sessionId,
-                        show_thinking: showThinking,
-                        stream: true
-                    })
-                });
-                
+            const endpoint = showThinking ? '/api/chat/anthropic' : '/api/chat';
+            
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    model: model,
+                    temperature: temperature,
+                    max_tokens: maxTokens,
+                    system_prompt: systemPrompt,
+                    session_id: sessionId,
+                    show_thinking: showThinking,
+                    stream: true
+                })
+            }).then(response => {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
+                function readChunk() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            finishStreaming();
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(line.slice(6));
                                 
                                 if (data.error) {
-                                    contentDiv.innerHTML = `<span class="error-message">错误: ${data.error}</span>`;
-                                    break;
+                                    aiContentDiv.innerHTML = `<span class="error-message">错误: ${data.error}</span>`;
+                                    finishStreaming();
+                                    return;
                                 }
                                 
                                 if (data.thinking_start) {
-                                    contentDiv.innerHTML = '<div class="thinking-block"><div class="thinking-label">💭 思考过程</div><div class="thinking-text"></div></div>';
+                                    aiContentDiv.innerHTML = '<div class="thinking-block"><div class="thinking-label">💭 思考过程</div><div class="thinking-text"></div></div>';
                                 }
                                 
                                 if (data.thinking) {
                                     thinkingContent += data.thinking;
-                                    const thinkingText = contentDiv.querySelector('.thinking-text');
+                                    const thinkingText = aiContentDiv.querySelector('.thinking-text');
                                     if (thinkingText) thinkingText.textContent = thinkingContent;
                                 }
                                 
@@ -572,7 +566,7 @@
                                     if (!textDiv) {
                                         textDiv = document.createElement('div');
                                         textDiv.className = 'message-text';
-                                        contentDiv.appendChild(textDiv);
+                                        aiContentDiv.appendChild(textDiv);
                                     }
                                     fullContent += data.content;
                                     textDiv.innerHTML = formatContent(fullContent);
@@ -585,18 +579,23 @@
                                 chatMessages.scrollTop = chatMessages.scrollHeight;
                             } catch (e) {}
                         }
-                    }
+                        
+                        readChunk();
+                    });
                 }
                 
-                const typingIndicator = contentDiv.querySelector('.typing-indicator');
-                if (typingIndicator) typingIndicator.remove();
-                
-            } catch (error) {
-                contentDiv.innerHTML = `<span class="error-message">请求失败: ${error.message}</span>`;
-            }
+                readChunk();
+            }).catch(error => {
+                aiContentDiv.innerHTML = `<span class="error-message">请求失败: ${error.message}</span>`;
+                finishStreaming();
+            });
             
-            isStreaming = false;
-            sendBtn.disabled = false;
+            function finishStreaming() {
+                const typingIndicator = aiContentDiv.querySelector('.typing-indicator');
+                if (typingIndicator) typingIndicator.remove();
+                isStreaming = false;
+                sendBtn.disabled = false;
+            }
         }
         
         async function generateImage() {
@@ -614,7 +613,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        prompt,
+                        prompt: prompt,
                         aspect_ratio: document.getElementById('aspect-ratio').value,
                         n: parseInt(document.getElementById('image-count').value)
                     })
@@ -657,7 +656,7 @@
                 const response = await fetch('/api/video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt })
+                    body: JSON.stringify({ prompt: prompt })
                 });
                 
                 const data = await response.json();
@@ -695,7 +694,7 @@
                 const response = await fetch('/api/music', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, lyrics: "" })
+                    body: JSON.stringify({ prompt: prompt, lyrics: "" })
                 });
                 
                 const data = await response.json();
@@ -728,7 +727,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        text,
+                        text: text,
                         voice_id: document.getElementById('voice-select').value,
                         emotion: document.getElementById('emotion-select').value,
                         speed: parseFloat(document.getElementById('tts-speed').value)
