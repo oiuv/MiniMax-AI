@@ -302,6 +302,195 @@ class MiniMaxClient:
             self._log(f"📄 生成内容长度: {len(response_text)} 字符")
             return response_text
 
+    def chat_stream(
+        self,
+        messages: list,
+        model: str = "MiniMax-M2.7",
+        system_prompt: str = None,
+        temperature: float = 1.0,
+        max_tokens: int = 2048,
+        use_anthropic_api: bool = True,
+        show_thinking: bool = False,
+    ):
+        """流式对话生成器
+
+        Args:
+            messages: 消息列表
+            model: 模型名称
+            system_prompt: 系统提示词
+            temperature: 温度参数
+            max_tokens: 最大生成token数
+            use_anthropic_api: 是否使用Anthropic API兼容接口
+            show_thinking: 是否显示思考过程
+
+        Yields:
+            dict: {"type": "thinking"|"text", "content": str}
+        """
+        from typing import Generator
+
+        model_mapping = {
+            "MiniMax-M2.7": "MiniMax-M2.7",
+            "MiniMax-M2.7-highspeed": "MiniMax-M2.7-highspeed",
+            "MiniMax-M2.5": "MiniMax-M2.5",
+            "MiniMax-M2.5-highspeed": "MiniMax-M2.5-highspeed",
+            "MiniMax-M2.1": "MiniMax-M2.1",
+            "MiniMax-M2.1-highspeed": "MiniMax-M2.1-highspeed",
+            "MiniMax-M2.1-lightning": "MiniMax-M2.7-highspeed",
+            "MiniMax-M2": "MiniMax-M2",
+            "M2-her": "M2-her",
+        }
+        model = model_mapping.get(model, model)
+
+        if use_anthropic_api:
+            endpoint = "v1/messages"
+            base_url = "https://api.minimaxi.com/anthropic"
+            self._log(f"🤖 流式对话 (Anthropic API, 模型: {model})")
+
+            anthropic_messages = []
+            for m in messages:
+                if m.get("role") == "system":
+                    continue
+                content = m.get("content", "")
+                if isinstance(content, str):
+                    anthropic_messages.append(
+                        {
+                            "role": m["role"],
+                            "content": [{"type": "text", "text": content}],
+                        }
+                    )
+                elif isinstance(content, list):
+                    anthropic_messages.append({"role": m["role"], "content": content})
+
+            data = {
+                "model": model,
+                "messages": anthropic_messages,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            if system_prompt:
+                data["system"] = system_prompt
+            if temperature is not None and 0 < temperature <= 1:
+                data["temperature"] = temperature
+
+            url = f"{base_url}/{endpoint}"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            self._log(f"🚀 开始流式请求...")
+            response = requests.post(
+                url, headers=headers, json=data, stream=True, timeout=120
+            )
+
+            if response.status_code != 200:
+                error_msg = f"HTTP {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", {}).get("message", error_msg)
+                except:
+                    pass
+                yield {"type": "error", "content": error_msg}
+                return
+
+            reasoning_buffer = ""
+            text_buffer = ""
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+
+                line = line.decode("utf-8")
+                if line.startswith("data: "):
+                    try:
+                        chunk_data = json.loads(line[6:])
+
+                        if chunk_data.get("type") == "content_block_start":
+                            pass
+
+                        elif chunk_data.get("type") == "content_block_delta":
+                            delta = chunk_data.get("delta", {})
+                            if delta.get("type") == "thinking_delta":
+                                thinking_text = delta.get("thinking", "")
+                                if thinking_text:
+                                    reasoning_buffer += thinking_text
+                                    if show_thinking:
+                                        yield {
+                                            "type": "thinking",
+                                            "content": thinking_text,
+                                        }
+
+                            elif delta.get("type") == "text_delta":
+                                text_content = delta.get("text", "")
+                                if text_content:
+                                    text_buffer += text_content
+                                    yield {"type": "text", "content": text_content}
+
+                        elif chunk_data.get("type") == "message_stop":
+                            pass
+
+                    except json.JSONDecodeError:
+                        continue
+
+            self._log(f"📄 流式完成: {len(text_buffer)} 字符")
+
+        else:
+            endpoint = "text/chatcompletion_v2"
+            self._log(f"🤖 流式对话 (标准API, 模型: {model})")
+
+            data = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            if system_prompt:
+                data["system_prompt"] = system_prompt
+            if temperature is not None:
+                data["temperature"] = temperature
+
+            url = f"{self.base_url}/{endpoint}"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            response = requests.post(
+                url, headers=headers, json=data, stream=True, timeout=120
+            )
+
+            if response.status_code != 200:
+                error_msg = f"HTTP {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("base_resp", {}).get(
+                        "status_msg", error_msg
+                    )
+                except:
+                    pass
+                yield {"type": "error", "content": error_msg}
+                return
+
+            text_buffer = ""
+            for line in response.iter_lines():
+                if not line:
+                    continue
+
+                line = line.decode("utf-8")
+                if line.startswith("data: "):
+                    try:
+                        chunk_data = json.loads(line[6:])
+                        if chunk_data.get("choices"):
+                            delta = chunk_data["choices"][0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                text_buffer += content
+                                yield {"type": "text", "content": content}
+                    except json.JSONDecodeError:
+                        continue
+
+            self._log(f"📄 流式完成: {len(text_buffer)} 字符")
+
     def image(
         self,
         prompt: str,
