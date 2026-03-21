@@ -127,7 +127,7 @@ def create_chat_tab():
 
             with gr.Column(scale=2):
                 # 对话区域
-                chatbot = gr.Chatbot(label="对话历史", height=500)
+                chatbot = gr.Chatbot(label="对话历史", height=480)
                 msg_input = gr.Textbox(
                     label="输入消息", placeholder="输入你想说的话..."
                 )
@@ -159,7 +159,7 @@ def create_chat_tab():
             outputs=[anthropic_model, m2her_model, m2her_settings, use_anthropic],
         )
 
-        # 事件处理
+        # 事件处理 - 流式响应
         def respond(
             message,
             chat_history,
@@ -178,7 +178,6 @@ def create_chat_tab():
             max_tok,
             use_anthropic,
         ):
-            # 确保所有参数都有默认值（防止 Gradio 传递 None）
             user_system = user_system or ""
             group_name = group_name or ""
             ai_name = ai_name or ""
@@ -190,151 +189,107 @@ def create_chat_tab():
             if not message.strip():
                 return chat_history, ""
 
-            # 确定实际使用的模型
             model = anthropic_m if category == "anthropic" else m2her_m
-
-            # 确保温度参数在有效范围 (0, 1]
             temp = max(0.01, min(temp, 1.0))
             top_p = max(0.01, min(top_p, 1.0))
 
-            # 准备消息
-            messages = []
+            chat_history.append({"role": "user", "content": message})
+            chat_history.append({"role": "assistant", "content": ""})
 
-            # 根据模型类型构建请求
-            if category == "m2her":
-                # M2-her 使用标准 MiniMax API，支持特殊角色类型
-                if system_prompt.strip():
-                    msg = {"role": "system", "content": system_prompt}
-                    if ai_name.strip():
-                        msg["name"] = ai_name
-                    messages.append(msg)
+            try:
+                if category == "m2her":
+                    messages = []
 
-                if user_system.strip():
-                    messages.append({"role": "user_system", "content": user_system})
-
-                if group_name.strip():
-                    messages.append({"role": "group", "content": group_name})
-
-                if sample_user.strip() and sample_ai.strip():
-                    messages.append(
-                        {"role": "sample_message_user", "content": sample_user}
-                    )
-                    messages.append({"role": "sample_message_ai", "content": sample_ai})
-
-                # 添加历史对话
-                for msg in chat_history:
-                    if isinstance(msg, dict):
+                    if system_prompt.strip():
+                        msg = {"role": "system", "content": system_prompt}
+                        if ai_name.strip():
+                            msg["name"] = ai_name
                         messages.append(msg)
 
-                # 添加当前用户消息
-                user_msg = {"role": "user", "content": message}
-                if user_name.strip():
-                    user_msg["name"] = user_name
-                messages.append(user_msg)
+                    if user_system.strip():
+                        messages.append({"role": "user_system", "content": user_system})
 
-                # 构建请求数据
-                data = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temp,
-                    "top_p": top_p,
-                    "max_completion_tokens": min(
-                        max_tok, 2048
-                    ),  # M2-her 限制 2048，参数名必须是 max_completion_tokens
-                }
+                    if group_name.strip():
+                        messages.append({"role": "group", "content": group_name})
 
-                try:
-                    response = client._request(
-                        "POST", "text/chatcompletion_v2", json=data
-                    )
-
-                    # 检查响应格式
-                    if not response:
-                        raise Exception("API 返回空响应")
-
-                    if "choices" not in response or not response["choices"]:
-                        # 尝试获取错误信息
-                        base_resp = response.get("base_resp", {})
-                        status_msg = base_resp.get("status_msg", "未知错误")
-                        status_code = base_resp.get("status_code", -1)
-                        raise Exception(f"API 错误 (code={status_code}): {status_msg}")
-
-                    reply = response["choices"][0]["message"]["content"]
-                    chat_history.append({"role": "user", "content": message})
-                    chat_history.append({"role": "assistant", "content": reply})
-                    return chat_history, ""
-                except Exception as e:
-                    chat_history.append({"role": "user", "content": message})
-                    chat_history.append(
-                        {"role": "assistant", "content": f"❌ 错误: {str(e)}"}
-                    )
-                    return chat_history, ""
-
-            else:
-                # Anthropic API 兼容模型
-                if system_prompt.strip():
-                    messages.append({"role": "system", "content": system_prompt})
-
-                # 添加历史对话
-                for msg in chat_history:
-                    if isinstance(msg, dict):
-                        messages.append(msg)
-
-                messages.append({"role": "user", "content": message})
-
-                # 使用 Anthropic API 格式
-                try:
-                    # 构建 Anthropic 格式消息
-                    anthropic_messages = []
-                    for m in messages:
-                        if m["role"] == "system":
-                            continue  # system 单独处理
-                        anthropic_messages.append(
-                            {
-                                "role": m["role"],
-                                "content": [{"type": "text", "text": m["content"]}],
-                            }
+                    if sample_user.strip() and sample_ai.strip():
+                        messages.append(
+                            {"role": "sample_message_user", "content": sample_user}
+                        )
+                        messages.append(
+                            {"role": "sample_message_ai", "content": sample_ai}
                         )
 
-                    data = {
-                        "model": model,
-                        "messages": anthropic_messages,
-                        "max_tokens": max_tok,
-                        "temperature": temp,
-                    }
+                    for msg in chat_history[:-1]:
+                        if isinstance(msg, dict):
+                            role = msg.get("role", "user")
+                            content = msg.get("content", "")
+                            if role in ("user", "assistant"):
+                                messages.append({"role": role, "content": content})
+
+                    user_msg = {"role": "user", "content": message}
+                    if user_name.strip():
+                        user_msg["name"] = user_name
+                    messages.append(user_msg)
+
+                    max_completion_tokens = min(max_tok, 2048)
+
+                    yield chat_history, ""
+                    for chunk in client.chat_stream(
+                        messages=messages,
+                        model=model,
+                        system_prompt=system_prompt,
+                        temperature=temp,
+                        max_tokens=max_completion_tokens,
+                        use_anthropic_api=False,
+                        show_thinking=False,
+                    ):
+                        if chunk["type"] == "error":
+                            chat_history[-1]["content"] = f"❌ 错误: {chunk['content']}"
+                            yield chat_history, ""
+                            return
+
+                        if chunk["type"] == "text":
+                            chat_history[-1]["content"] += chunk["content"]
+                            yield chat_history, ""
+
+                else:
+                    messages = []
+
                     if system_prompt.strip():
-                        data["system"] = system_prompt
+                        messages.append({"role": "system", "content": system_prompt})
 
-                    # 调用 Anthropic 端点
-                    response = client._request("POST", "v1/messages", json=data)
+                    for msg in chat_history[:-1]:
+                        if isinstance(msg, dict):
+                            role = msg.get("role", "user")
+                            content = msg.get("content", "")
+                            if role in ("user", "assistant"):
+                                messages.append({"role": role, "content": content})
 
-                    # 检查响应格式
-                    if not response:
-                        raise Exception("API 返回空响应")
+                    messages.append({"role": "user", "content": message})
 
-                    # 解析 Anthropic 格式响应
-                    content_blocks = response.get("content", [])
-                    if not content_blocks:
-                        raise Exception("API 响应中没有内容")
+                    yield chat_history, ""
+                    for chunk in client.chat_stream(
+                        messages=messages,
+                        model=model,
+                        system_prompt=system_prompt,
+                        temperature=temp,
+                        max_tokens=max_tok,
+                        use_anthropic_api=True,
+                        show_thinking=False,
+                    ):
+                        if chunk["type"] == "error":
+                            chat_history[-1]["content"] = f"❌ 错误: {chunk['content']}"
+                            yield chat_history, ""
+                            return
 
-                    reply = ""
-                    for block in content_blocks:
-                        if block.get("type") == "text":
-                            reply = block.get("text", "")
-                            break
+                        if chunk["type"] == "text":
+                            chat_history[-1]["content"] += chunk["content"]
+                            yield chat_history, ""
 
-                    if not reply:
-                        reply = "(模型未返回文本内容)"
-
-                    chat_history.append({"role": "user", "content": message})
-                    chat_history.append({"role": "assistant", "content": reply})
-                    return chat_history, ""
-                except Exception as e:
-                    chat_history.append({"role": "user", "content": message})
-                    chat_history.append(
-                        {"role": "assistant", "content": f"❌ 错误: {str(e)}"}
-                    )
-                    return chat_history, ""
+            except Exception as e:
+                chat_history[-1]["content"] = f"❌ 错误: {str(e)}"
+                yield chat_history, ""
 
         def clear_chat():
             return [], ""
@@ -1031,31 +986,36 @@ def create_file_tab():
                 choices=["voice_clone", "prompt_audio", "t2a_async_input"],
                 value="voice_clone",
                 label="文件用途",
+                scale=3,
             )
-            refresh_btn = gr.Button("🔄 刷新列表")
+            refresh_btn = gr.Button("🔄 刷新列表", scale=1)
 
-        # 存储完整文件列表数据
         files_state = gr.State([])
 
         file_table = gr.Dataframe(
             headers=["ID", "文件名", "用途", "大小", "创建时间"],
             label="文件列表",
-            interactive=False,  # 设为只读，避免误编辑
+            interactive=False,
         )
 
-        with gr.Row():
-            upload_file = gr.File(label="上传文件")
-            upload_btn = gr.Button("⬆️ 上传", variant="primary")
-            download_file_id = gr.Textbox(
-                label="下载/删除文件ID",
-                placeholder="输入文件ID或点击列表中的ID...",
-                lines=1,
-            )
-            download_btn = gr.Button("⬇️ 下载", variant="secondary")
-            delete_btn = gr.Button("🗑️ 删除", variant="stop")
+        with gr.Accordion("📤 上传文件", open=False):
+            with gr.Row():
+                upload_file = gr.File(label="选择文件", file_count="single")
+                with gr.Column(scale=1):
+                    gr.HTML("<br>")
+                    upload_btn = gr.Button("⬆️ 上传", variant="primary")
 
-        download_status = gr.Textbox(label="下载状态", interactive=False)
-        download_result = gr.File(label="下载结果")
+        with gr.Accordion("📥 下载/删除文件", open=False):
+            with gr.Row():
+                download_file_id = gr.Textbox(
+                    label="文件ID",
+                    placeholder="点击列表自动填充...",
+                    scale=3,
+                )
+                download_btn = gr.Button("⬇️ 下载", variant="secondary", scale=1)
+                delete_btn = gr.Button("🗑️ 删除", variant="stop", scale=1)
+
+            download_status = gr.Textbox(label="状态", interactive=False)
 
         def refresh_files(purpose):
             try:
@@ -1100,17 +1060,16 @@ def create_file_tab():
 
         def download_file(file_id):
             if not file_id.strip():
-                return "请输入文件ID", None
+                return "请输入文件ID"
 
             try:
-                # 调用下载方法
                 filepath = client.download_file(file_id.strip())
                 if Path(filepath).exists():
-                    return f"✅ 文件下载成功: {filepath}", filepath
+                    return f"✅ 文件下载成功: {filepath}"
                 else:
-                    return "❌ 下载失败: 文件不存在", None
+                    return "❌ 下载失败: 文件不存在"
             except Exception as e:
-                return f"❌ 下载失败: {str(e)}", None
+                return f"❌ 下载失败: {str(e)}"
 
         def delete_file(file_id, purpose):
             if not file_id.strip():
@@ -1158,7 +1117,7 @@ def create_file_tab():
         download_btn.click(
             download_file,
             inputs=[download_file_id],
-            outputs=[download_status, download_result],
+            outputs=[download_status],
         )
         delete_btn.click(
             delete_file,
@@ -1352,12 +1311,10 @@ def create_app():
     connected, msg = init_client()
 
     with gr.Blocks(title="MiniMax AI 创意工作室", fill_width=True) as app:
-        # 头部
-        gr.Markdown("# 🎨 MiniMax AI 创意工作室")
+        gr.Markdown(
+            f"# 🎨 MiniMax AI 创意工作室 <span style='font-size: 14px; color: #666; margin-left: 10px;'>{msg}</span>"
+        )
         gr.Markdown("基于 MiniMax API 的多功能 AI 创作平台")
-
-        # 连接状态
-        status_bar = gr.Textbox(value=msg, label="连接状态", interactive=False)
 
         if not connected:
             gr.Markdown("""
