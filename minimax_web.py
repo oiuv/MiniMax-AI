@@ -47,91 +47,90 @@ def create_chat_tab():
                 model_category = gr.Dropdown(
                     choices=[
                         ("编程/Agent (Anthropic API)", "anthropic"),
-                        ("对话/角色扮演 (M2-her)", "m2her")
+                        ("对话/角色扮演 (M2-her)", "m2her"),
                     ],
                     value="anthropic",
-                    label="模型类别"
+                    label="模型类别",
                 )
 
                 # Anthropic API 模型
                 anthropic_model = gr.Dropdown(
                     choices=[
+                        "MiniMax-M2.7",
+                        "MiniMax-M2.7-highspeed",
                         "MiniMax-M2.5",
                         "MiniMax-M2.5-highspeed",
                         "MiniMax-M2.1",
                         "MiniMax-M2.1-highspeed",
-                        "MiniMax-M2"
+                        "MiniMax-M2",
                     ],
-                    value="MiniMax-M2.5",
+                    value="MiniMax-M2.7",
                     label="模型",
-                    visible=True
+                    visible=True,
                 )
 
                 # M2-her 模型（专用）
                 m2her_model = gr.Dropdown(
-                    choices=["M2-her"],
-                    value="M2-her",
-                    label="模型",
-                    visible=False
+                    choices=["M2-her"], value="M2-her", label="模型", visible=False
                 )
 
                 # 系统提示词（通用）
                 system_prompt = gr.Textbox(
                     label="系统提示词 (system)",
                     placeholder="设定AI的角色和行为...",
-                    lines=2
+                    lines=2,
                 )
 
                 # M2-her 专用参数
-                with gr.Accordion("🎭 M2-her 角色设定", open=False, visible=False) as m2her_settings:
+                with gr.Accordion(
+                    "🎭 M2-her 角色设定", open=False, visible=False
+                ) as m2her_settings:
                     user_system = gr.Textbox(
                         label="用户角色设定 (user_system)",
                         placeholder="设定用户的角色和人设...",
-                        lines=2
+                        lines=2,
                     )
                     group_name = gr.Textbox(
                         label="对话分组名称 (group)",
                         placeholder="标识对话场景...",
-                        lines=1
+                        lines=1,
                     )
                     with gr.Row():
                         ai_name = gr.Textbox(
-                            label="AI名称",
-                            placeholder="如：MiniMax AI",
-                            lines=1
+                            label="AI名称", placeholder="如：MiniMax AI", lines=1
                         )
                         user_name = gr.Textbox(
-                            label="用户名称",
-                            placeholder="如：用户",
-                            lines=1
+                            label="用户名称", placeholder="如：用户", lines=1
                         )
                     with gr.Accordion("示例对话学习", open=False):
                         sample_user = gr.Textbox(
                             label="示例用户输入",
                             placeholder="示例用户说的话...",
-                            lines=2
+                            lines=2,
                         )
                         sample_ai = gr.Textbox(
-                            label="示例AI回复",
-                            placeholder="示例AI的回复...",
-                            lines=2
+                            label="示例AI回复", placeholder="示例AI的回复...", lines=2
                         )
 
                 # 高级参数
                 with gr.Accordion("高级参数", open=False):
-                    temperature = gr.Slider(0.01, 1, value=1.0, step=0.05, label="Temperature (0-1]")
+                    temperature = gr.Slider(
+                        0.01, 1, value=1.0, step=0.05, label="Temperature (0-1]"
+                    )
                     top_p = gr.Slider(0.01, 1, value=0.95, step=0.05, label="Top-p")
-                    max_tokens = gr.Slider(100, 8192, value=4096, step=100, label="Max Tokens")
+                    max_tokens = gr.Slider(
+                        100, 8192, value=4096, step=100, label="Max Tokens"
+                    )
                     use_anthropic = gr.Checkbox(
-                        label="使用 Anthropic API 格式",
-                        value=True,
-                        visible=False
+                        label="使用 Anthropic API 格式", value=True, visible=False
                     )
 
             with gr.Column(scale=2):
                 # 对话区域
                 chatbot = gr.Chatbot(label="对话历史", height=500)
-                msg_input = gr.Textbox(label="输入消息", placeholder="输入你想说的话...")
+                msg_input = gr.Textbox(
+                    label="输入消息", placeholder="输入你想说的话..."
+                )
 
                 with gr.Row():
                     send_btn = gr.Button("🚀 发送", variant="primary")
@@ -144,26 +143,41 @@ def create_chat_tab():
                     anthropic_model: gr.Dropdown(visible=True),
                     m2her_model: gr.Dropdown(visible=False),
                     m2her_settings: gr.Accordion(visible=False),
-                    use_anthropic: gr.Checkbox(value=True, visible=False)
+                    use_anthropic: gr.Checkbox(value=True, visible=False),
                 }
             else:
                 return {
                     anthropic_model: gr.Dropdown(visible=False),
                     m2her_model: gr.Dropdown(visible=True),
                     m2her_settings: gr.Accordion(visible=True),
-                    use_anthropic: gr.Checkbox(value=False, visible=False)
+                    use_anthropic: gr.Checkbox(value=False, visible=False),
                 }
 
         model_category.change(
             on_category_change,
             inputs=[model_category],
-            outputs=[anthropic_model, m2her_model, m2her_settings, use_anthropic]
+            outputs=[anthropic_model, m2her_model, m2her_settings, use_anthropic],
         )
 
         # 事件处理
-        def respond(message, chat_history, category, anthropic_m, m2her_m, system_prompt,
-                   user_system, group_name, ai_name, user_name, sample_user, sample_ai,
-                   temp, top_p, max_tok, use_anthropic):
+        def respond(
+            message,
+            chat_history,
+            category,
+            anthropic_m,
+            m2her_m,
+            system_prompt,
+            user_system,
+            group_name,
+            ai_name,
+            user_name,
+            sample_user,
+            sample_ai,
+            temp,
+            top_p,
+            max_tok,
+            use_anthropic,
+        ):
             # 确保所有参数都有默认值（防止 Gradio 传递 None）
             user_system = user_system or ""
             group_name = group_name or ""
@@ -202,7 +216,9 @@ def create_chat_tab():
                     messages.append({"role": "group", "content": group_name})
 
                 if sample_user.strip() and sample_ai.strip():
-                    messages.append({"role": "sample_message_user", "content": sample_user})
+                    messages.append(
+                        {"role": "sample_message_user", "content": sample_user}
+                    )
                     messages.append({"role": "sample_message_ai", "content": sample_ai})
 
                 # 添加历史对话
@@ -222,30 +238,36 @@ def create_chat_tab():
                     "messages": messages,
                     "temperature": temp,
                     "top_p": top_p,
-                    "max_completion_tokens": min(max_tok, 2048)  # M2-her 限制 2048，参数名必须是 max_completion_tokens
+                    "max_completion_tokens": min(
+                        max_tok, 2048
+                    ),  # M2-her 限制 2048，参数名必须是 max_completion_tokens
                 }
 
                 try:
-                    response = client._request("POST", "text/chatcompletion_v2", json=data)
+                    response = client._request(
+                        "POST", "text/chatcompletion_v2", json=data
+                    )
 
                     # 检查响应格式
                     if not response:
                         raise Exception("API 返回空响应")
 
-                    if 'choices' not in response or not response['choices']:
+                    if "choices" not in response or not response["choices"]:
                         # 尝试获取错误信息
-                        base_resp = response.get('base_resp', {})
-                        status_msg = base_resp.get('status_msg', '未知错误')
-                        status_code = base_resp.get('status_code', -1)
+                        base_resp = response.get("base_resp", {})
+                        status_msg = base_resp.get("status_msg", "未知错误")
+                        status_code = base_resp.get("status_code", -1)
                         raise Exception(f"API 错误 (code={status_code}): {status_msg}")
 
-                    reply = response['choices'][0]['message']['content']
+                    reply = response["choices"][0]["message"]["content"]
                     chat_history.append({"role": "user", "content": message})
                     chat_history.append({"role": "assistant", "content": reply})
                     return chat_history, ""
                 except Exception as e:
                     chat_history.append({"role": "user", "content": message})
-                    chat_history.append({"role": "assistant", "content": f"❌ 错误: {str(e)}"})
+                    chat_history.append(
+                        {"role": "assistant", "content": f"❌ 错误: {str(e)}"}
+                    )
                     return chat_history, ""
 
             else:
@@ -267,16 +289,18 @@ def create_chat_tab():
                     for m in messages:
                         if m["role"] == "system":
                             continue  # system 单独处理
-                        anthropic_messages.append({
-                            "role": m["role"],
-                            "content": [{"type": "text", "text": m["content"]}]
-                        })
+                        anthropic_messages.append(
+                            {
+                                "role": m["role"],
+                                "content": [{"type": "text", "text": m["content"]}],
+                            }
+                        )
 
                     data = {
                         "model": model,
                         "messages": anthropic_messages,
                         "max_tokens": max_tok,
-                        "temperature": temp
+                        "temperature": temp,
                     }
                     if system_prompt.strip():
                         data["system"] = system_prompt
@@ -307,7 +331,9 @@ def create_chat_tab():
                     return chat_history, ""
                 except Exception as e:
                     chat_history.append({"role": "user", "content": message})
-                    chat_history.append({"role": "assistant", "content": f"❌ 错误: {str(e)}"})
+                    chat_history.append(
+                        {"role": "assistant", "content": f"❌ 错误: {str(e)}"}
+                    )
                     return chat_history, ""
 
         def clear_chat():
@@ -316,21 +342,47 @@ def create_chat_tab():
         send_btn.click(
             respond,
             inputs=[
-                msg_input, chatbot, model_category, anthropic_model, m2her_model,
-                system_prompt, user_system, group_name, ai_name, user_name,
-                sample_user, sample_ai, temperature, top_p, max_tokens, use_anthropic
+                msg_input,
+                chatbot,
+                model_category,
+                anthropic_model,
+                m2her_model,
+                system_prompt,
+                user_system,
+                group_name,
+                ai_name,
+                user_name,
+                sample_user,
+                sample_ai,
+                temperature,
+                top_p,
+                max_tokens,
+                use_anthropic,
             ],
-            outputs=[chatbot, msg_input]
+            outputs=[chatbot, msg_input],
         )
 
         msg_input.submit(
             respond,
             inputs=[
-                msg_input, chatbot, model_category, anthropic_model, m2her_model,
-                system_prompt, user_system, group_name, ai_name, user_name,
-                sample_user, sample_ai, temperature, top_p, max_tokens, use_anthropic
+                msg_input,
+                chatbot,
+                model_category,
+                anthropic_model,
+                m2her_model,
+                system_prompt,
+                user_system,
+                group_name,
+                ai_name,
+                user_name,
+                sample_user,
+                sample_ai,
+                temperature,
+                top_p,
+                max_tokens,
+                use_anthropic,
             ],
-            outputs=[chatbot, msg_input]
+            outputs=[chatbot, msg_input],
         )
 
         clear_btn.click(clear_chat, outputs=[chatbot, msg_input])
@@ -345,22 +397,22 @@ def create_image_tab():
         with gr.Row():
             with gr.Column(scale=1):
                 prompt = gr.Textbox(
-                    label="提示词",
-                    placeholder="描述你想要生成的图像...",
-                    lines=3
+                    label="提示词", placeholder="描述你想要生成的图像...", lines=3
                 )
                 model = gr.Dropdown(
                     choices=["image-01", "image-01-live"],
                     value="image-01",
-                    label="模型"
+                    label="模型",
                 )
                 aspect_ratio = gr.Dropdown(
                     choices=["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"],
                     value="1:1",
-                    label="宽高比"
+                    label="宽高比",
                 )
                 num_images = gr.Slider(1, 9, value=1, step=1, label="生成数量")
-                ref_image = gr.Image(label="参考图片（可选，用于图生图）", type="filepath")
+                ref_image = gr.Image(
+                    label="参考图片（可选，用于图生图）", type="filepath"
+                )
 
                 generate_btn = gr.Button("🎨 生成图像", variant="primary")
 
@@ -378,7 +430,7 @@ def create_image_tab():
                     "prompt": prompt,
                     "model": model,
                     "aspect_ratio": aspect,
-                    "n": int(num)
+                    "n": int(num),
                 }
 
                 if ref_img:
@@ -391,10 +443,14 @@ def create_image_tab():
                 if isinstance(result, list):
                     # URL 列表
                     for i, url in enumerate(result):
-                        if url.startswith('http'):
+                        if url.startswith("http"):
                             # 下载图片
-                            img_path = file_mgr.get_path("images", f"image_{file_mgr.generate_timestamp()}_{i}.png")
+                            img_path = file_mgr.get_path(
+                                "images",
+                                f"image_{file_mgr.generate_timestamp()}_{i}.png",
+                            )
                             import urllib.request
+
                             urllib.request.urlretrieve(url, img_path)
                             image_paths.append(str(img_path))
                         else:
@@ -407,7 +463,7 @@ def create_image_tab():
         generate_btn.click(
             generate_image,
             inputs=[prompt, model, aspect_ratio, num_images, ref_image],
-            outputs=[output_gallery, status_text]
+            outputs=[output_gallery, status_text],
         )
 
 
@@ -425,22 +481,25 @@ def create_video_tab():
                         prompt = gr.Textbox(
                             label="视频描述",
                             placeholder="描述你想要生成的视频...",
-                            lines=4
+                            lines=4,
                         )
                         model = gr.Dropdown(
-                            choices=["MiniMax-Hailuo-2.3", "T2V-01-Director", "T2V-01", "T2V-01-live"],
+                            choices=[
+                                "MiniMax-Hailuo-2.3",
+                                "T2V-01-Director",
+                                "T2V-01",
+                                "T2V-01-live",
+                            ],
                             value="MiniMax-Hailuo-2.3",
-                            label="模型"
+                            label="模型",
                         )
                         duration = gr.Dropdown(
-                            choices=[6, 10],
-                            value=6,
-                            label="时长（秒）"
+                            choices=[6, 10], value=6, label="时长（秒）"
                         )
                         resolution = gr.Dropdown(
                             choices=["512P", "720P", "768P", "1080P"],
                             value="768P",
-                            label="分辨率"
+                            label="分辨率",
                         )
                         generate_btn = gr.Button("🎬 生成视频", variant="primary")
 
@@ -458,30 +517,36 @@ def create_video_tab():
                             prompt=prompt,
                             model=model,
                             duration=int(duration),
-                            resolution=resolution
+                            resolution=resolution,
                         )
 
                         # 轮询状态
                         max_attempts = 60  # 最多等待10分钟
                         for i in range(max_attempts):
                             status_result = client.video_status(task_id)
-                            task_status = status_result.get('status', '')
+                            task_status = status_result.get("status", "")
 
-                            if task_status == 'Success':
-                                file_id = status_result.get('file_id')
+                            if task_status == "Success":
+                                file_id = status_result.get("file_id")
                                 if file_id:
                                     # 下载视频
                                     video_path = client.download_video(file_id)
                                     return f"✅ 视频生成成功！", video_path
                                 else:
                                     return "✅ 视频生成成功，但无法获取文件", None
-                            elif task_status == 'Fail':
+                            elif task_status == "Fail":
                                 return "❌ 视频生成失败", None
-                            elif task_status in ['Preparing', 'Queueing', 'Processing']:
-                                yield f"⏳ 状态: {task_status} (等待 {i+1} 秒)...", None
+                            elif task_status in ["Preparing", "Queueing", "Processing"]:
+                                yield (
+                                    f"⏳ 状态: {task_status} (等待 {i + 1} 秒)...",
+                                    None,
+                                )
                                 time.sleep(10)
                             else:
-                                yield f"⏳ 状态: {task_status} (等待 {i+1} 秒)...", None
+                                yield (
+                                    f"⏳ 状态: {task_status} (等待 {i + 1} 秒)...",
+                                    None,
+                                )
                                 time.sleep(10)
 
                         return "⏱️ 等待超时，请稍后手动查询", None
@@ -492,7 +557,7 @@ def create_video_tab():
                 generate_btn.click(
                     generate_text_video,
                     inputs=[prompt, model, duration, resolution],
-                    outputs=[status, video_output]
+                    outputs=[status, video_output],
                 )
 
             # 图生视频
@@ -500,16 +565,23 @@ def create_video_tab():
                 with gr.Row():
                     with gr.Column(scale=1):
                         first_frame = gr.Image(label="首帧图片", type="filepath")
-                        prompt_img = gr.Textbox(label="视频描述（可选）", placeholder="描述视频内容...", lines=3)
+                        prompt_img = gr.Textbox(
+                            label="视频描述（可选）",
+                            placeholder="描述视频内容...",
+                            lines=3,
+                        )
                         model_img = gr.Dropdown(
-                            choices=["I2V-01-Director", "I2V-01-live", "I2V-01", "MiniMax-Hailuo-2.3"],
+                            choices=[
+                                "I2V-01-Director",
+                                "I2V-01-live",
+                                "I2V-01",
+                                "MiniMax-Hailuo-2.3",
+                            ],
                             value="I2V-01-Director",
-                            label="模型"
+                            label="模型",
                         )
                         duration_img = gr.Dropdown(
-                            choices=[6, 10],
-                            value=6,
-                            label="时长（秒）"
+                            choices=[6, 10], value=6, label="时长（秒）"
                         )
                         generate_btn_img = gr.Button("🎬 生成视频", variant="primary")
 
@@ -527,26 +599,29 @@ def create_video_tab():
                             first_frame_image=first_frame,
                             prompt=prompt or "",
                             model=model,
-                            duration=int(duration)
+                            duration=int(duration),
                         )
 
                         # 轮询状态
                         max_attempts = 60
                         for i in range(max_attempts):
                             status_result = client.video_status(task_id)
-                            task_status = status_result.get('status', '')
+                            task_status = status_result.get("status", "")
 
-                            if task_status == 'Success':
-                                file_id = status_result.get('file_id')
+                            if task_status == "Success":
+                                file_id = status_result.get("file_id")
                                 if file_id:
                                     video_path = client.download_video(file_id)
                                     return f"✅ 视频生成成功！", video_path
                                 else:
                                     return "✅ 视频生成成功，但无法获取文件", None
-                            elif task_status == 'Fail':
+                            elif task_status == "Fail":
                                 return "❌ 视频生成失败", None
                             else:
-                                yield f"⏳ 状态: {task_status} (等待 {i+1} 秒)...", None
+                                yield (
+                                    f"⏳ 状态: {task_status} (等待 {i + 1} 秒)...",
+                                    None,
+                                )
                                 time.sleep(10)
 
                         return "⏱️ 等待超时，请稍后手动查询", None
@@ -557,7 +632,7 @@ def create_video_tab():
                 generate_btn_img.click(
                     generate_image_video,
                     inputs=[first_frame, prompt_img, model_img, duration_img],
-                    outputs=[status_img, video_output_img]
+                    outputs=[status_img, video_output_img],
                 )
 
 
@@ -575,25 +650,39 @@ def create_audio_tab():
                         model = gr.Dropdown(
                             choices=["music-2.5+", "music-2.5"],
                             value="music-2.5+",
-                            label="模型"
+                            label="模型",
                         )
-                        instrumental = gr.Checkbox(label="纯音乐模式（无人声）", value=False)
+                        instrumental = gr.Checkbox(
+                            label="纯音乐模式（无人声）", value=False
+                        )
                         prompt = gr.Textbox(
                             label="音乐描述",
                             placeholder="描述风格、情绪、场景，如：流行音乐,欢快,适合派对...",
-                            lines=2
+                            lines=2,
                         )
                         lyrics = gr.Textbox(
                             label="歌词",
                             placeholder="[Verse]\n歌词内容...\n[Chorus]\n副歌内容...",
-                            lines=6
+                            lines=6,
                         )
-                        lyrics_optimizer = gr.Checkbox(label="自动生成歌词", value=False)
+                        lyrics_optimizer = gr.Checkbox(
+                            label="自动生成歌词", value=False
+                        )
 
                         with gr.Accordion("音频参数", open=False):
-                            sample_rate = gr.Dropdown([16000, 24000, 32000, 44100], value=44100, label="采样率")
-                            bitrate = gr.Dropdown([32000, 64000, 128000, 256000], value=256000, label="比特率")
-                            format_type = gr.Dropdown(["mp3", "wav", "pcm"], value="mp3", label="格式")
+                            sample_rate = gr.Dropdown(
+                                [16000, 24000, 32000, 44100],
+                                value=44100,
+                                label="采样率",
+                            )
+                            bitrate = gr.Dropdown(
+                                [32000, 64000, 128000, 256000],
+                                value=256000,
+                                label="比特率",
+                            )
+                            format_type = gr.Dropdown(
+                                ["mp3", "wav", "pcm"], value="mp3", label="格式"
+                            )
 
                         generate_btn = gr.Button("🎵 生成音乐", variant="primary")
 
@@ -601,7 +690,16 @@ def create_audio_tab():
                         status = gr.Textbox(label="状态", value="等待生成...")
                         audio_output = gr.Audio(label="生成结果", type="filepath")
 
-                def generate_music(model, instrumental, prompt, lyrics, lyrics_opt, sample_rate, bitrate, format_type):
+                def generate_music(
+                    model,
+                    instrumental,
+                    prompt,
+                    lyrics,
+                    lyrics_opt,
+                    sample_rate,
+                    bitrate,
+                    format_type,
+                ):
                     try:
                         # 调用音乐生成
                         audio_data = client.music(
@@ -612,7 +710,7 @@ def create_audio_tab():
                             lyrics_optimizer=lyrics_opt,
                             sample_rate=int(sample_rate),
                             bitrate=int(bitrate),
-                            format=format_type
+                            format=format_type,
                         )
 
                         # 保存音频文件
@@ -626,8 +724,17 @@ def create_audio_tab():
 
                 generate_btn.click(
                     generate_music,
-                    inputs=[model, instrumental, prompt, lyrics, lyrics_optimizer, sample_rate, bitrate, format_type],
-                    outputs=[status, audio_output]
+                    inputs=[
+                        model,
+                        instrumental,
+                        prompt,
+                        lyrics,
+                        lyrics_optimizer,
+                        sample_rate,
+                        bitrate,
+                        format_type,
+                    ],
+                    outputs=[status, audio_output],
                 )
 
             # TTS
@@ -637,37 +744,75 @@ def create_audio_tab():
                         text = gr.Textbox(
                             label="文本内容",
                             placeholder="输入要转换为语音的文本...",
-                            lines=4
+                            lines=4,
                         )
+
                         # 加载音色列表
                         def load_voices():
                             try:
                                 result = client.list_voices("system")
-                                voices = result.get('voices', [])
+                                voices = result.get("voices", [])
                                 if voices:
-                                    choices = [v['voice_id'] for v in voices]
-                                    return gr.Dropdown(choices=choices, value=choices[0])
+                                    choices = [v["voice_id"] for v in voices]
+                                    return gr.Dropdown(
+                                        choices=choices, value=choices[0]
+                                    )
                                 else:
                                     # 默认音色列表
-                                    default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
-                                    return gr.Dropdown(choices=default_voices, value="female-chengshu")
+                                    default_voices = [
+                                        "female-chengshu",
+                                        "male-chengshu",
+                                        "female-yujie",
+                                        "male-yujie",
+                                        "female-tianmei",
+                                    ]
+                                    return gr.Dropdown(
+                                        choices=default_voices, value="female-chengshu"
+                                    )
                             except:
-                                default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
-                                return gr.Dropdown(choices=default_voices, value="female-chengshu")
+                                default_voices = [
+                                    "female-chengshu",
+                                    "male-chengshu",
+                                    "female-yujie",
+                                    "male-yujie",
+                                    "female-tianmei",
+                                ]
+                                return gr.Dropdown(
+                                    choices=default_voices, value="female-chengshu"
+                                )
 
                         voice = gr.Dropdown(label="音色", choices=[])
                         tts_model = gr.Dropdown(
-                            choices=["speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo", "speech-02-hd", "speech-02-turbo"],
+                            choices=[
+                                "speech-2.8-hd",
+                                "speech-2.8-turbo",
+                                "speech-2.6-hd",
+                                "speech-2.6-turbo",
+                                "speech-02-hd",
+                                "speech-02-turbo",
+                            ],
                             value="speech-2.8-hd",
-                            label="TTS模型"
+                            label="TTS模型",
                         )
                         emotion = gr.Dropdown(
-                            choices=["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whisper"],
+                            choices=[
+                                "happy",
+                                "sad",
+                                "angry",
+                                "fearful",
+                                "disgusted",
+                                "surprised",
+                                "calm",
+                                "fluent",
+                                "whisper",
+                            ],
                             value="happy",
-                            label="情感"
+                            label="情感",
                         )
                         with gr.Row():
-                            speed = gr.Slider(0.5, 2.0, value=1.0, step=0.1, label="语速")
+                            speed = gr.Slider(
+                                0.5, 2.0, value=1.0, step=0.1, label="语速"
+                            )
                             vol = gr.Slider(0, 10, value=1.0, step=0.1, label="音量")
                             pitch = gr.Slider(-12, 12, value=0, step=1, label="音高")
 
@@ -681,17 +826,33 @@ def create_audio_tab():
                 def load_voices():
                     try:
                         result = client.list_voices("system")
-                        voices = result.get('voices', [])
+                        voices = result.get("voices", [])
                         if voices:
-                            choices = [v['voice_id'] for v in voices]
+                            choices = [v["voice_id"] for v in voices]
                             return gr.Dropdown(choices=choices, value=choices[0])
                         else:
                             # 默认音色列表
-                            default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
-                            return gr.Dropdown(choices=default_voices, value="female-chengshu")
+                            default_voices = [
+                                "female-chengshu",
+                                "male-chengshu",
+                                "female-yujie",
+                                "male-yujie",
+                                "female-tianmei",
+                            ]
+                            return gr.Dropdown(
+                                choices=default_voices, value="female-chengshu"
+                            )
                     except:
-                        default_voices = ["female-chengshu", "male-chengshu", "female-yujie", "male-yujie", "female-tianmei"]
-                        return gr.Dropdown(choices=default_voices, value="female-chengshu")
+                        default_voices = [
+                            "female-chengshu",
+                            "male-chengshu",
+                            "female-yujie",
+                            "male-yujie",
+                            "female-tianmei",
+                        ]
+                        return gr.Dropdown(
+                            choices=default_voices, value="female-chengshu"
+                        )
 
                 # 初始化音色列表
                 voice.choices = load_voices().choices
@@ -709,7 +870,7 @@ def create_audio_tab():
                             emotion=emotion,
                             speed=speed,
                             vol=vol,
-                            pitch=pitch
+                            pitch=pitch,
                         )
 
                         # 保存音频
@@ -728,7 +889,7 @@ def create_audio_tab():
                 tts_btn.click(
                     generate_tts,
                     inputs=[text, voice, tts_model, emotion, speed, vol, pitch],
-                    outputs=[tts_status, tts_audio]
+                    outputs=[tts_status, tts_audio],
                 )
 
 
@@ -743,18 +904,14 @@ def create_podcast_tab():
                 topic = gr.Textbox(
                     label="播客主题",
                     placeholder="输入播客主题，如：AI创作短剧会成为新风口吗？",
-                    lines=2
+                    lines=2,
                 )
                 welcome_text = gr.Textbox(
-                    label="欢迎语",
-                    value="欢迎收听本期节目！",
-                    lines=1
+                    label="欢迎语", value="欢迎收听本期节目！", lines=1
                 )
                 with gr.Accordion("对话编辑（高级）", open=False):
                     dialogue_json = gr.Code(
-                        label="对话 JSON（可选，用于自定义）",
-                        language="json",
-                        lines=10
+                        label="对话 JSON（可选，用于自定义）", language="json", lines=10
                     )
 
                 generate_btn = gr.Button("🎙️ 生成播客", variant="primary")
@@ -786,23 +943,31 @@ def create_podcast_tab():
 
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"请生成关于\"{topic}\"的播客对话，开头必须包含欢迎语：{welcome_text}"}
+                    {
+                        "role": "user",
+                        "content": f'请生成关于"{topic}"的播客对话，开头必须包含欢迎语：{welcome_text}',
+                    },
                 ]
 
-                response = client._request("POST", "text/chatcompletion_v2", json={
-                    "model": "MiniMax-M2.5",
-                    "messages": messages,
-                    "temperature": 0.8,
-                    "max_completion_tokens": 2048
-                })
+                response = client._request(
+                    "POST",
+                    "text/chatcompletion_v2",
+                    json={
+                        "model": "MiniMax-M2.5",
+                        "messages": messages,
+                        "temperature": 0.8,
+                        "max_completion_tokens": 2048,
+                    },
+                )
 
-                dialogue_text = response['choices'][0]['message']['content']
+                dialogue_text = response["choices"][0]["message"]["content"]
 
                 # 尝试解析JSON
                 try:
                     # 提取JSON部分
                     import re
-                    json_match = re.search(r'\[.*\]', dialogue_text, re.DOTALL)
+
+                    json_match = re.search(r"\[.*\]", dialogue_text, re.DOTALL)
                     if json_match:
                         dialogue_data = json.loads(json_match.group())
                     else:
@@ -815,9 +980,9 @@ def create_podcast_tab():
                 # 合成每段语音并合并
                 audio_segments = []
                 for i, item in enumerate(dialogue_data):
-                    text = item.get('text', '')
-                    voice_id = item.get('voice_id', 'female-chengshu')
-                    emotion = item.get('emotion', 'happy')
+                    text = item.get("text", "")
+                    voice_id = item.get("voice_id", "female-chengshu")
+                    emotion = item.get("emotion", "happy")
 
                     if text:
                         try:
@@ -826,10 +991,10 @@ def create_podcast_tab():
                                 voice_id=voice_id,
                                 emotion=emotion,
                                 speed=1.0,
-                                vol=1.0
+                                vol=1.0,
                             )
                             audio_segments.append(audio_data)
-                            yield f"🎤 合成进度: {i+1}/{len(dialogue_data)}", None
+                            yield f"🎤 合成进度: {i + 1}/{len(dialogue_data)}", None
                         except:
                             continue
 
@@ -838,7 +1003,9 @@ def create_podcast_tab():
                 if audio_segments:
                     timestamp = file_mgr.generate_timestamp()
                     filename = f"podcast_{timestamp}.mp3"
-                    filepath = file_mgr.save_file(audio_segments[0], filename, "podcasts")
+                    filepath = file_mgr.save_file(
+                        audio_segments[0], filename, "podcasts"
+                    )
                     return f"✅ 播客生成成功（示例，仅第一段）！", filepath
                 else:
                     return "❌ 语音合成失败", None
@@ -849,7 +1016,7 @@ def create_podcast_tab():
         generate_btn.click(
             generate_podcast,
             inputs=[topic, welcome_text, dialogue_json],
-            outputs=[progress, podcast_audio]
+            outputs=[progress, podcast_audio],
         )
 
 
@@ -863,7 +1030,7 @@ def create_file_tab():
             file_purpose = gr.Dropdown(
                 choices=["voice_clone", "prompt_audio", "t2a_async_input"],
                 value="voice_clone",
-                label="文件用途"
+                label="文件用途",
             )
             refresh_btn = gr.Button("🔄 刷新列表")
 
@@ -873,13 +1040,17 @@ def create_file_tab():
         file_table = gr.Dataframe(
             headers=["ID", "文件名", "用途", "大小", "创建时间"],
             label="文件列表",
-            interactive=False  # 设为只读，避免误编辑
+            interactive=False,  # 设为只读，避免误编辑
         )
 
         with gr.Row():
             upload_file = gr.File(label="上传文件")
             upload_btn = gr.Button("⬆️ 上传", variant="primary")
-            download_file_id = gr.Textbox(label="下载/删除文件ID", placeholder="输入文件ID或点击列表中的ID...", lines=1)
+            download_file_id = gr.Textbox(
+                label="下载/删除文件ID",
+                placeholder="输入文件ID或点击列表中的ID...",
+                lines=1,
+            )
             download_btn = gr.Button("⬇️ 下载", variant="secondary")
             delete_btn = gr.Button("🗑️ 删除", variant="stop")
 
@@ -889,19 +1060,25 @@ def create_file_tab():
         def refresh_files(purpose):
             try:
                 result = client.list_files(purpose)
-                files = result.get('files', [])
+                files = result.get("files", [])
 
                 data = []
                 for f in files:
-                    created_at = f.get('created_at', 0)
-                    created_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else ''
-                    data.append([
-                        str(f.get('file_id', '')),  # 确保ID是字符串
-                        f.get('filename', ''),
-                        f.get('purpose', ''),
-                        f"{f.get('bytes', 0) / 1024:.1f} KB",
-                        created_str
-                    ])
+                    created_at = f.get("created_at", 0)
+                    created_str = (
+                        datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
+                        if created_at
+                        else ""
+                    )
+                    data.append(
+                        [
+                            str(f.get("file_id", "")),  # 确保ID是字符串
+                            f.get("filename", ""),
+                            f.get("purpose", ""),
+                            f"{f.get('bytes', 0) / 1024:.1f} KB",
+                            created_str,
+                        ]
+                    )
 
                 table_data = data if data else [["", "暂无文件", "", "", ""]]
                 return table_data, data  # 同时返回表格显示数据和完整数据
@@ -943,11 +1120,13 @@ def create_file_tab():
             try:
                 # 调用删除方法
                 result = client.delete_file(file_id.strip(), purpose)
-                if 'base_resp' in result and result['base_resp']['status_code'] == 0:
+                if "base_resp" in result and result["base_resp"]["status_code"] == 0:
                     table_data, files_data = refresh_files(purpose)
                     return f"✅ 文件 {file_id} 删除成功", table_data, files_data
                 else:
-                    error_msg = result.get('base_resp', {}).get('status_msg', '未知错误')
+                    error_msg = result.get("base_resp", {}).get(
+                        "status_msg", "未知错误"
+                    )
                     table_data, files_data = refresh_files(purpose)
                     return f"❌ 删除失败: {error_msg}", table_data, files_data
             except Exception as e:
@@ -964,12 +1143,28 @@ def create_file_tab():
                     return files_data[row_index][0]
             return ""
 
-        file_table.select(on_select_file, inputs=[files_state], outputs=[download_file_id])
+        file_table.select(
+            on_select_file, inputs=[files_state], outputs=[download_file_id]
+        )
 
-        refresh_btn.click(refresh_files, inputs=[file_purpose], outputs=[file_table, files_state])
-        upload_btn.click(upload_new_file, inputs=[upload_file, file_purpose], outputs=[file_table, files_state])
-        download_btn.click(download_file, inputs=[download_file_id], outputs=[download_status, download_result])
-        delete_btn.click(delete_file, inputs=[download_file_id, file_purpose], outputs=[download_status, file_table, files_state])
+        refresh_btn.click(
+            refresh_files, inputs=[file_purpose], outputs=[file_table, files_state]
+        )
+        upload_btn.click(
+            upload_new_file,
+            inputs=[upload_file, file_purpose],
+            outputs=[file_table, files_state],
+        )
+        download_btn.click(
+            download_file,
+            inputs=[download_file_id],
+            outputs=[download_status, download_result],
+        )
+        delete_btn.click(
+            delete_file,
+            inputs=[download_file_id, file_purpose],
+            outputs=[download_status, file_table, files_state],
+        )
 
         # 初始加载
         # file_table.value = refresh_files("voice_clone")
@@ -986,12 +1181,11 @@ def create_voice_tab():
                 voice_type = gr.Dropdown(
                     choices=["all", "system", "cloning", "generation"],
                     value="all",
-                    label="音色类型"
+                    label="音色类型",
                 )
                 refresh_voice_btn = gr.Button("🔄 刷新列表")
                 voice_list = gr.Dataframe(
-                    headers=["ID", "名称", "类型", "描述"],
-                    label="可用音色"
+                    headers=["ID", "名称", "类型", "描述"], label="可用音色"
                 )
 
                 def refresh_voices(vtype):
@@ -1001,34 +1195,53 @@ def create_voice_tab():
 
                         # 按类型获取音色列表
                         type_mapping = {
-                            'all': ['system_voice', 'voice_cloning', 'voice_generation', 'music_generation'],
-                            'system': ['system_voice'],
-                            'cloning': ['voice_cloning'],
-                            'generation': ['voice_generation']
+                            "all": [
+                                "system_voice",
+                                "voice_cloning",
+                                "voice_generation",
+                                "music_generation",
+                            ],
+                            "system": ["system_voice"],
+                            "cloning": ["voice_cloning"],
+                            "generation": ["voice_generation"],
                         }
 
-                        target_types = type_mapping.get(vtype, ['system_voice'])
+                        target_types = type_mapping.get(vtype, ["system_voice"])
 
                         for t in target_types:
                             if t in result:
                                 for v in result[t]:
-                                    voice_type = t.replace('_voice', '').replace('voice_', '')
+                                    voice_type = t.replace("_voice", "").replace(
+                                        "voice_", ""
+                                    )
                                     # 提取描述信息
-                                    desc = v.get('desc', v.get('description', v.get('remarks', '')))
+                                    desc = v.get(
+                                        "desc",
+                                        v.get("description", v.get("remarks", "")),
+                                    )
                                     if isinstance(desc, list):
-                                        desc = ' '.join(desc)
-                                    data.append([
-                                        v.get('voice_id', ''),
-                                        v.get('name', v.get('voice_name', v.get('voice_id', ''))),
-                                        voice_type,
-                                        desc
-                                    ])
+                                        desc = " ".join(desc)
+                                    data.append(
+                                        [
+                                            v.get("voice_id", ""),
+                                            v.get(
+                                                "name",
+                                                v.get(
+                                                    "voice_name", v.get("voice_id", "")
+                                                ),
+                                            ),
+                                            voice_type,
+                                            desc,
+                                        ]
+                                    )
 
                         return data if data else [["", "暂无音色", "", ""]]
                     except Exception as e:
                         return [["", f"错误: {str(e)}", "", ""]]
 
-                refresh_voice_btn.click(refresh_voices, inputs=[voice_type], outputs=[voice_list])
+                refresh_voice_btn.click(
+                    refresh_voices, inputs=[voice_type], outputs=[voice_list]
+                )
 
                 # 保存刷新函数到全局，方便页面加载时调用
                 global refresh_voices_global
@@ -1042,7 +1255,9 @@ def create_voice_tab():
                 with gr.Row():
                     with gr.Column():
                         clone_audio = gr.Audio(label="上传音频样本", type="filepath")
-                        voice_id_input = gr.Textbox(label="音色ID", placeholder="自定义音色标识...")
+                        voice_id_input = gr.Textbox(
+                            label="音色ID", placeholder="自定义音色标识..."
+                        )
                         clone_btn = gr.Button("🎤 开始克隆", variant="primary")
                     with gr.Column():
                         clone_status = gr.Textbox(label="状态")
@@ -1056,7 +1271,7 @@ def create_voice_tab():
                     try:
                         # 先上传文件
                         upload_result = client.upload_file(audio_file, "voice_clone")
-                        file_id = upload_result.get('file', {}).get('file_id')
+                        file_id = upload_result.get("file", {}).get("file_id")
 
                         if not file_id:
                             return "文件上传失败"
@@ -1065,10 +1280,10 @@ def create_voice_tab():
                         result = client.voice_clone(
                             file_id=file_id,
                             voice_id=voice_id,
-                            text="这是音色克隆的试听音频"
+                            text="这是音色克隆的试听音频",
                         )
 
-                        demo_audio = result.get('demo_audio', '')
+                        demo_audio = result.get("demo_audio", "")
                         if demo_audio:
                             return f"✅ 音色克隆成功！试听链接: {demo_audio[:100]}..."
                         else:
@@ -1076,7 +1291,11 @@ def create_voice_tab():
                     except Exception as e:
                         return f"❌ 错误: {str(e)}"
 
-                clone_btn.click(clone_voice, inputs=[clone_audio, voice_id_input], outputs=[clone_status])
+                clone_btn.click(
+                    clone_voice,
+                    inputs=[clone_audio, voice_id_input],
+                    outputs=[clone_status],
+                )
 
             with gr.TabItem("✨ 设计音色"):
                 with gr.Row():
@@ -1084,12 +1303,12 @@ def create_voice_tab():
                         voice_desc = gr.Textbox(
                             label="音色描述",
                             placeholder="描述你想要的音色特征...",
-                            lines=3
+                            lines=3,
                         )
                         preview_text = gr.Textbox(
                             label="预览文本",
                             value="这是一段测试语音，用于试听设计的音色效果。",
-                            lines=2
+                            lines=2,
                         )
                         design_btn = gr.Button("✨ 生成音色", variant="primary")
                     with gr.Column():
@@ -1101,26 +1320,29 @@ def create_voice_tab():
                         return "请输入音色描述", None
 
                     try:
-                        result = client.voice_design(
-                            prompt=desc,
-                            preview_text=preview
-                        )
+                        result = client.voice_design(prompt=desc, preview_text=preview)
 
-                        voice_id = result.get('voice_id', '')
-                        trial_audio = result.get('trial_audio', '')
+                        voice_id = result.get("voice_id", "")
+                        trial_audio = result.get("trial_audio", "")
 
                         if trial_audio:
                             # 保存试听音频
                             timestamp = file_mgr.generate_timestamp()
                             filename = f"voice_design_{timestamp}.mp3"
-                            filepath = file_mgr.save_file(trial_audio, filename, "audio")
+                            filepath = file_mgr.save_file(
+                                trial_audio, filename, "audio"
+                            )
                             return f"✅ 音色设计成功！ID: {voice_id}", filepath
                         else:
                             return f"✅ 音色设计成功！ID: {voice_id}", None
                     except Exception as e:
                         return f"❌ 错误: {str(e)}", None
 
-                design_btn.click(design_voice, inputs=[voice_desc, preview_text], outputs=[design_status, design_audio])
+                design_btn.click(
+                    design_voice,
+                    inputs=[voice_desc, preview_text],
+                    outputs=[design_status, design_audio],
+                )
 
 
 # ==================== 主应用 ====================
@@ -1129,10 +1351,7 @@ def create_app():
     # 初始化
     connected, msg = init_client()
 
-    with gr.Blocks(
-        title="MiniMax AI 创意工作室",
-        fill_width=True
-    ) as app:
+    with gr.Blocks(title="MiniMax AI 创意工作室", fill_width=True) as app:
         # 头部
         gr.Markdown("# 🎨 MiniMax AI 创意工作室")
         gr.Markdown("基于 MiniMax API 的多功能 AI 创作平台")
@@ -1165,14 +1384,16 @@ def create_app():
             try:
                 if client:
                     result = client.list_voices("all")
-                    voices = result.get('voices', [])
+                    voices = result.get("voices", [])
                     data = []
                     for v in voices:
-                        data.append([
-                            v.get('voice_id', ''),
-                            v.get('name', v.get('voice_id', '')),
-                            v.get('type', 'system')
-                        ])
+                        data.append(
+                            [
+                                v.get("voice_id", ""),
+                                v.get("name", v.get("voice_id", "")),
+                                v.get("type", "system"),
+                            ]
+                        )
                     return data if data else [["", "暂无音色", ""]]
             except:
                 return [["", "加载失败", ""]]
@@ -1202,5 +1423,5 @@ if __name__ == "__main__":
         server_port=args.port,
         share=args.share,
         show_error=True,
-        theme=gr.themes.Soft()
+        theme=gr.themes.Soft(),
     )

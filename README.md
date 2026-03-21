@@ -60,8 +60,8 @@ uv run python minimax_cli.py --interactive
 
 #### 命令行模式
 ```bash
-# ========== 智能对话（支持最新 MiniMax-M2.1 系列）==========
-# 基础对话（默认使用 MiniMax-M2.1 模型）
+# ========== 智能对话（支持最新 MiniMax-M2.7 系列）==========
+# 基础对话（默认使用 MiniMax-M2.7 模型）
 python minimax_cli.py -c "你好，MiniMax"
 
 # 高级对话 - 使用 Anthropic API 兼容接口
@@ -69,13 +69,14 @@ python minimax_cli.py -c "解释量子计算" --anthropic-api --show-thinking
 
 # 自定义系统提示词和温度
 python minimax_cli.py -c "写一首关于春天的诗" \
-    --chat-model MiniMax-M2.1 \
+    --chat-model MiniMax-M2.7 \
     --system-prompt "你是一位专业的诗人" \
     --temperature 0.9 \
     --max-tokens 2048
 
 # 使用极速模型
-python minimax_cli.py -c "快速回答: 1+1等于几?" --chat-model M2.1-lightning
+python minimax_cli.py -c "快速回答: 1+1等于几?" --chat-model MiniMax-M2.7-highspeed
+
 
 # ========== 图像生成（支持高级参数）==========
 python minimax_cli.py -i "樱花树下的猫" --n 2 --aspect-ratio 16:9
@@ -153,7 +154,7 @@ python minimax_cli.py --list-voices
 
 | 功能 | 模型 | 描述 |
 |---|---|---|
-| **智能对话** | MiniMax-M2.5系列 | 最新M2.5/M2.5-lightning，支持Anthropic API，思维链可视化，M2-her角色扮演 |
+| **智能对话** | MiniMax-M2.7系列 | 最新M2.7/M2.7-highspeed，204,800上下文，支持Anthropic API，思维链可视化，M2-her角色扮演 |
 | **图像生成** | image-01系列 | 支持1-9张图片，多种宽高比，风格控制 |
 | **图生图** | image-01系列 | 基于参考图片生成，支持人像character类型 |
 | **视频生成** | MiniMax-Hailuo-2.3 | 肢体动作、物理表现与指令遵循能力全面升级 |
@@ -171,7 +172,7 @@ python minimax_cli.py --list-voices
 全新的Web界面提供直观易用的操作体验，支持所有MiniMax AI能力：
 
 ### 核心功能模块
-- **💬 智能对话**：双模型支持（MiniMax-M2.5系列通用模型/M2-her角色扮演模型），支持系统提示词、参数调整、思维链显示
+- **💬 智能对话**：多模型支持（MiniMax-M2.7系列/M2-her角色扮演模型），支持系统提示词、参数调整、思维链显示
 - **🎨 图像生成**：文生图/图生图，支持多种分辨率、风格选择、批量生成
 - **🎬 视频生成**：文生视频/图生视频/首尾帧/主体参考，自动状态轮询和视频下载
 - **🎵 音频合成**：音乐生成+TTS语音合成，支持音色选择、情感调整、参数自定义
@@ -241,10 +242,10 @@ python podcast_cli.py topic.txt -o ./my_podcasts
 
 ## 🎯 高级功能
 
-### 智能对话参数（支持 MiniMax-M2.1 系列）
+### 智能对话参数（支持 MiniMax-M2.7 系列）
 ```bash
 python minimax_cli.py -c "对话内容" \
-    --chat-model MiniMax-M2.1 \        # 对话模型 [MiniMax-M2.1, MiniMax-M2.1-lightning, MiniMax-M2]
+    --chat-model MiniMax-M2.7 \        # 对话模型 [MiniMax-M2.7, MiniMax-M2.7-highspeed, MiniMax-M2.5, MiniMax-M2.1, MiniMax-M2, M2-her]
     --system-prompt "你是一个助手" \  # 系统提示词
     --temperature 0.8 \                # 温度参数 (0.0-1.0]，默认1.0
     --max-tokens 2048 \                # 最大生成token数，默认1024
@@ -266,9 +267,12 @@ python minimax_cli.py -c "快速生成一份代码大纲" \
 ### 对话模型特性
 | 模型 | 速度 | 特点 | 适用场景 |
 |------|------|------|----------|
-| **MiniMax-M2.5** | ~60 tps | 最新一代大模型，能力全面提升，多语言和编程能力更强 | 编程、复杂任务、通用场景 |
-| **MiniMax-M2.5-lightning** | ~100 tps | 极速版，响应更快，成本更低 | 快速对话、实时应用 |
-| **MiniMax-M2.1** | ~60 tps | 强大多语言能力，编程体验全面升级 | 兼容性需求 |
+| **MiniMax-M2.7** | ~60 tps | 最新旗舰模型，开启自我迭代，204,800 上下文 | 复杂任务、长文本、通用场景 |
+| **MiniMax-M2.7-highspeed** | ~100 tps | 极速版，响应更快，成本更低 | 快速对话、实时应用 |
+| **MiniMax-M2.5** | ~60 tps | 顶尖性能与性价比 | 通用场景 |
+| **MiniMax-M2.5-highspeed** | ~100 tps | 极速版 | 快速对话 |
+| **MiniMax-M2.1** | ~60 tps | 强大多语言能力，编程体验全面升级 | 编程、Agent 工作流 |
+| **MiniMax-M2** | 标准 | Agent 工作流优化 | Agent 任务 |
 | **M2-her** | 标准 | 专为对话场景优化，支持角色扮演和情感交流 | 聊天、陪伴、角色扮演 |
 
 ### Anthropic API 兼容性说明
@@ -619,7 +623,7 @@ from minimax_cli import MiniMaxClient
 
 client = MiniMaxClient()
 
-# ========== 智能对话（支持 MiniMax-M2.1）==========
+# ========== 智能对话（支持 MiniMax-M2.7）==========
 # 基础对话
 response = client.chat("介绍一下人工智能的发展历史")
 print(response)
@@ -627,7 +631,7 @@ print(response)
 # 使用最新模型
 response = client.chat(
     "解释量子计算的原理",
-    model="MiniMax-M2.1",
+    model="MiniMax-M2.7",
     temperature=0.7,
     max_tokens=2048
 )

@@ -17,12 +17,13 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import argparse
 
+
 class MiniMaxClient:
     """精简版MiniMax客户端"""
 
     def __init__(self):
-        self.group_id = os.getenv('MINIMAX_GROUP_ID')
-        self.api_key = os.getenv('MINIMAX_API_KEY')
+        self.group_id = os.getenv("MINIMAX_GROUP_ID")
+        self.api_key = os.getenv("MINIMAX_API_KEY")
         self.base_url = "https://api.minimaxi.com/v1"
         self.verbose = False
 
@@ -32,44 +33,44 @@ class MiniMaxClient:
     def _log(self, message: str, level: str = "INFO"):
         """日志输出"""
         print(f"[{level}] {message}")
-    
+
     def _log_request(self, method: str, endpoint: str, data: dict = None):
         """请求日志"""
         self._log(f"🚀 {method} {endpoint}")
         if self.verbose and data:
             self._log(f"📤 请求数据: {json.dumps(data, ensure_ascii=False, indent=2)}")
-    
+
     def _setup_credentials(self):
         """配置向导"""
-        config_file = Path.home() / '.minimax_ai' / 'config.json'
+        config_file = Path.home() / ".minimax_ai" / "config.json"
         config_file.parent.mkdir(exist_ok=True)
-        
+
         if config_file.exists():
             try:
                 with open(config_file) as f:
                     config = json.load(f)
-                    self.group_id = config.get('group_id')
-                    self.api_key = config.get('api_key')
+                    self.group_id = config.get("group_id")
+                    self.api_key = config.get("api_key")
                     if self.group_id and self.api_key:
                         return
             except Exception:
                 pass
-        
+
         print("⚠️  需要配置API密钥")
         group_id = input("请输入Group ID: ").strip()
         api_key = input("请输入API Key: ").strip()
-        
+
         if not group_id or not api_key:
             print("❌ Group ID和API Key不能为空")
             sys.exit(1)
-        
-        with open(config_file, 'w') as f:
-            json.dump({'group_id': group_id, 'api_key': api_key}, f, indent=2)
-        
+
+        with open(config_file, "w") as f:
+            json.dump({"group_id": group_id, "api_key": api_key}, f, indent=2)
+
         print(f"✅ 配置已保存到 {config_file}")
         print("请重新运行程序")
         sys.exit(0)
-    
+
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """统一请求"""
         # 检测是否是 Anthropic API 端点
@@ -78,15 +79,15 @@ class MiniMaxClient:
         else:
             url = f"{self.base_url}/{endpoint}"
 
-        if any(k in endpoint for k in ['t2a_v2', 'voice_clone', 'music_generation']):
+        if any(k in endpoint for k in ["t2a_v2", "voice_clone", "music_generation"]):
             url += f"?GroupId={self.group_id}"
 
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
         }
 
-        self._log_request(method, endpoint, kwargs.get('json'))
+        self._log_request(method, endpoint, kwargs.get("json"))
 
         for attempt in range(3):
             try:
@@ -97,9 +98,11 @@ class MiniMaxClient:
                 self._log(f"📥 响应状态: {response.status_code}")
 
                 # Anthropic API 响应格式不同，不需要检查 base_resp
-                if 'base_resp' in result and result['base_resp']['status_code'] != 0:
-                    self._log(f"⚠️ API错误: {result['base_resp']['status_msg']}", "ERROR")
-                    if result['base_resp']['status_code'] == 1002 and attempt < 2:
+                if "base_resp" in result and result["base_resp"]["status_code"] != 0:
+                    self._log(
+                        f"⚠️ API错误: {result['base_resp']['status_msg']}", "ERROR"
+                    )
+                    if result["base_resp"]["status_code"] == 1002 and attempt < 2:
                         time.sleep(2 * (attempt + 1))
                         continue
                     raise Exception(f"API错误: {result['base_resp']['status_msg']}")
@@ -111,22 +114,29 @@ class MiniMaxClient:
                 if attempt == 2:
                     self._log(f"❌ 请求失败: {e}", "ERROR")
                     raise  # 抛出异常而不是退出，让上层处理
-                self._log(f"🔄 重试第{attempt+1}次...", "WARN")
+                self._log(f"🔄 重试第{attempt + 1}次...", "WARN")
                 time.sleep(1)
-    
-    def chat(self, message: str, model: str = "MiniMax-M2.5",
-             system_prompt: str = None,
-             # M2-her 专属参数（暂时注释，等待 API BUG 修复）
-             # user_system: str = None, group: str = None,
-             # sample_user: str = None, sample_ai: str = None,
-             temperature: float = 1.0, top_p: float = 1.0,
-             max_tokens: int = 2048, stream: bool = False,
-             use_anthropic_api: bool = False, show_thinking: bool = False) -> str:
+
+    def chat(
+        self,
+        message: str,
+        model: str = "MiniMax-M2.7",
+        system_prompt: str = None,
+        # M2-her 专属参数（暂时注释，等待 API BUG 修复）
+        # user_system: str = None, group: str = None,
+        # sample_user: str = None, sample_ai: str = None,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        max_tokens: int = 2048,
+        stream: bool = False,
+        use_anthropic_api: bool = False,
+        show_thinking: bool = False,
+    ) -> str:
         """智能对话（支持 M2-her 和 Anthropic API 兼容接口）
 
         Args:
             message: 用户消息内容
-            model: 模型名称，可选值：M2-her, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.1, MiniMax-M2.1-highspeed, MiniMax-M2
+            model: 模型名称，可选值：M2-her, MiniMax-M2.7, MiniMax-M2.7-highspeed, MiniMax-M2.5, MiniMax-M2.5-highspeed, MiniMax-M2.1, MiniMax-M2.1-highspeed, MiniMax-M2
             system_prompt: 系统提示词（定义 AI 的角色和行为）
             # M2-her 专属参数（暂时注释）
             # user_system: 用户角色设定（用于角色扮演场景定义用户身份）
@@ -145,13 +155,15 @@ class MiniMaxClient:
         """
         # 模型映射：M2-her 为对话模型，MiniMax-M2 系列为文本生成模型
         model_mapping = {
+            "MiniMax-M2.7": "MiniMax-M2.7",
+            "MiniMax-M2.7-highspeed": "MiniMax-M2.7-highspeed",
             "MiniMax-M2.5": "MiniMax-M2.5",
             "MiniMax-M2.5-highspeed": "MiniMax-M2.5-highspeed",
             "MiniMax-M2.1": "MiniMax-M2.1",
             "MiniMax-M2.1-highspeed": "MiniMax-M2.1-highspeed",
-            "MiniMax-M2.1-lightning": "MiniMax-M2.1-highspeed",  # 兼容旧名称
+            "MiniMax-M2.1-lightning": "MiniMax-M2.7-highspeed",  # 兼容旧名称，映射到最新高速版
             "MiniMax-M2": "MiniMax-M2",
-            "M2-her": "M2-her"
+            "M2-her": "M2-her",
         }
         model = model_mapping.get(model, model)
 
@@ -168,17 +180,17 @@ class MiniMaxClient:
         # 构建请求数据
         if use_anthropic_api:
             # Anthropic API 格式
-            messages = [{"role": "user", "content": [{"type": "text", "text": message}]}]
-            data = {
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens
-            }
+            messages = [
+                {"role": "user", "content": [{"type": "text", "text": message}]}
+            ]
+            data = {"model": model, "messages": messages, "max_tokens": max_tokens}
             if system_prompt:
                 data["system"] = system_prompt
             if temperature is not None:
                 if temperature <= 0 or temperature > 1:
-                    raise ValueError(f"temperature 必须在 (0.0, 1.0] 范围内，当前为 {temperature}")
+                    raise ValueError(
+                        f"temperature 必须在 (0.0, 1.0] 范围内，当前为 {temperature}"
+                    )
                 data["temperature"] = temperature
             if stream:
                 data["stream"] = True
@@ -206,10 +218,7 @@ class MiniMaxClient:
                 messages.append({"role": "user", "content": message})
 
                 # 构建请求数据
-                data = {
-                    "model": model,
-                    "messages": messages
-                }
+                data = {"model": model, "messages": messages}
 
                 # M2-her 参数验证
                 if max_tokens > 2048:
@@ -219,11 +228,7 @@ class MiniMaxClient:
             else:
                 # 原有模型格式（MiniMax-M2 系列）
                 messages = [{"role": "user", "content": message}]
-                data = {
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tokens
-                }
+                data = {"model": model, "messages": messages, "max_tokens": max_tokens}
                 if system_prompt:
                     # 标准 API 将 system prompt 作为第一条消息
                     messages.insert(0, {"role": "system", "content": system_prompt})
@@ -253,15 +258,17 @@ class MiniMaxClient:
             return self._parse_anthropic_response(response, show_thinking)
         else:
             # 检查响应是否包含 choices
-            if 'choices' not in response or response['choices'] is None:
+            if "choices" not in response or response["choices"] is None:
                 self._log(f"❌ API 响应异常: {response}")
                 raise ValueError(f"API 响应格式异常: {response}")
 
-            content = response['choices'][0]['message']['content']
+            content = response["choices"][0]["message"]["content"]
             self._log(f"📄 生成内容长度: {len(content)} 字符")
             return content
 
-    def _parse_anthropic_response(self, response: dict, show_thinking: bool = False) -> str | dict:
+    def _parse_anthropic_response(
+        self, response: dict, show_thinking: bool = False
+    ) -> str | dict:
         """解析 Anthropic API 格式的响应
 
         Args:
@@ -289,18 +296,28 @@ class MiniMaxClient:
             return {
                 "thinking": thinking_text,
                 "content": response_text,
-                "full_response": content_blocks
+                "full_response": content_blocks,
             }
         else:
             self._log(f"📄 生成内容长度: {len(response_text)} 字符")
             return response_text
-    
-    def image(self, prompt: str, model: str = "image-01", n: int = 1,
-                aspect_ratio: str = "1:1", width: int = None, height: int = None,
-                seed: int = None, response_format: str = "url",
-                prompt_optimizer: bool = False, aigc_watermark: bool = False,
-                style_type: str = None, style_weight: float = 0.8,
-                reference_image: str = None) -> list:
+
+    def image(
+        self,
+        prompt: str,
+        model: str = "image-01",
+        n: int = 1,
+        aspect_ratio: str = "1:1",
+        width: int = None,
+        height: int = None,
+        seed: int = None,
+        response_format: str = "url",
+        prompt_optimizer: bool = False,
+        aigc_watermark: bool = False,
+        style_type: str = None,
+        style_weight: float = 0.8,
+        reference_image: str = None,
+    ) -> list:
         """图像生成（文生图/图生图）
 
         Args:
@@ -356,7 +373,7 @@ class MiniMaxClient:
             "prompt": prompt,
             "response_format": response_format,
             "n": n,
-            "prompt_optimizer": prompt_optimizer
+            "prompt_optimizer": prompt_optimizer,
         }
 
         # 图生图专用参数
@@ -364,10 +381,7 @@ class MiniMaxClient:
             # 处理参考图片
             processed_ref_image = self._process_image_input(reference_image)
             data["subject_reference"] = [
-                {
-                    "type": "character",
-                    "image_file": processed_ref_image
-                }
+                {"type": "character", "image_file": processed_ref_image}
             ]
             self._log(f"📷 参考图片: {reference_image}")
 
@@ -387,14 +401,13 @@ class MiniMaxClient:
 
         # 风格设置（仅对image-01-live生效）
         if style_type:
-            data["style"] = {
-                "style_type": style_type,
-                "style_weight": style_weight
-            }
+            data["style"] = {"style_type": style_type, "style_weight": style_weight}
 
         self._log(f"📋 使用模型: {model}")
         self._log(f"🎭 图片数量: {n}")
-        self._log(f"📐 尺寸设置: {width}x{height}" if width else f"📐 宽高比: {aspect_ratio}")
+        self._log(
+            f"📐 尺寸设置: {width}x{height}" if width else f"📐 宽高比: {aspect_ratio}"
+        )
         if style_type:
             self._log(f"🎨 风格设置: {style_type} (权重: {style_weight})")
 
@@ -402,25 +415,32 @@ class MiniMaxClient:
 
         # 根据response_format返回不同格式的数据
         if response_format == "url":
-            result = response.get('data', {}).get('image_urls', [])
+            result = response.get("data", {}).get("image_urls", [])
         else:
-            result = response.get('data', {}).get('image_base64', [])
+            result = response.get("data", {}).get("image_base64", [])
 
         # 显示生成统计
-        metadata = response.get('metadata', {})
-        success_count = int(metadata.get('success_count', len(result)))
-        failed_count = int(metadata.get('failed_count', 0))
+        metadata = response.get("metadata", {})
+        success_count = int(metadata.get("success_count", len(result)))
+        failed_count = int(metadata.get("failed_count", 0))
 
         self._log(f"📸 {generation_mode}成功生成: {success_count} 张")
         if failed_count > 0:
             self._log(f"⚠️ 内容安全拦截: {failed_count} 张")
 
         return result
-    
-    def video(self, prompt: str, model: str = "MiniMax-Hailuo-2.3", duration: int = 6,
-                 resolution: str = None, prompt_optimizer: bool = True,
-                 fast_pretreatment: bool = False, aigc_watermark: bool = False,
-                 callback_url: str = None) -> str:
+
+    def video(
+        self,
+        prompt: str,
+        model: str = "MiniMax-Hailuo-2.3",
+        duration: int = 6,
+        resolution: str = None,
+        prompt_optimizer: bool = True,
+        fast_pretreatment: bool = False,
+        aigc_watermark: bool = False,
+        callback_url: str = None,
+    ) -> str:
         """视频生成 - 支持镜头控制和高级参数
 
         Args:
@@ -445,12 +465,18 @@ class MiniMaxClient:
 
         # 智能选择默认分辨率
         if resolution is None:
-            if model in ['T2V-01-Director', 'T2V-01', 'I2V-01-Director', 'I2V-01-live', 'I2V-01']:
-                resolution = '720P'
-            elif model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02']:
-                resolution = '768P'  # Hailuo系列默认768P以获得更好质量
+            if model in [
+                "T2V-01-Director",
+                "T2V-01",
+                "I2V-01-Director",
+                "I2V-01-live",
+                "I2V-01",
+            ]:
+                resolution = "720P"
+            elif model in ["MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02"]:
+                resolution = "768P"  # Hailuo系列默认768P以获得更好质量
             else:
-                resolution = '720P'
+                resolution = "720P"
             self._log(f"🎯 自动选择分辨率: {resolution}")
 
         # 参数验证
@@ -474,7 +500,7 @@ class MiniMaxClient:
             "duration": duration,
             "resolution": resolution,
             "prompt_optimizer": prompt_optimizer,
-            "aigc_watermark": aigc_watermark
+            "aigc_watermark": aigc_watermark,
         }
 
         # 添加可选参数
@@ -487,7 +513,7 @@ class MiniMaxClient:
             self._log(f"📞 设置回调URL: {callback_url}")
 
         response = self._request("POST", "video_generation", json=data)
-        task_id = response.get('task_id', '')
+        task_id = response.get("task_id", "")
         self._log(f"🎯 视频任务ID: {task_id}")
         return task_id
 
@@ -499,24 +525,45 @@ class MiniMaxClient:
         combinations = {
             # Hailuo 系列（支持 T2V 和 I2V）
             "MiniMax-Hailuo-2.3": [(6, "768P"), (10, "768P"), (6, "1080P")],
-            "MiniMax-Hailuo-2.3-Fast": [(6, "768P"), (10, "768P"), (6, "1080P")],  # 仅 I2V
-            "MiniMax-Hailuo-02": [(6, "512P"), (6, "768P"), (10, "768P"), (6, "1080P")],  # I2V 支持 512P
+            "MiniMax-Hailuo-2.3-Fast": [
+                (6, "768P"),
+                (10, "768P"),
+                (6, "1080P"),
+            ],  # 仅 I2V
+            "MiniMax-Hailuo-02": [
+                (6, "512P"),
+                (6, "768P"),
+                (10, "768P"),
+                (6, "1080P"),
+            ],  # I2V 支持 512P
             # T2V 专用模型
             "T2V-01-Director": [(6, "720P")],
             "T2V-01": [(6, "720P")],
             # I2V 专用模型
             "I2V-01-Director": [(6, "720P")],
             "I2V-01-live": [(6, "720P")],
-            "I2V-01": [(6, "720P")]
+            "I2V-01": [(6, "720P")],
         }
         return combinations.get(model, [(6, "720P")])
 
     def _detect_camera_moves(self, prompt: str) -> list:
         """检测prompt中的运镜指令"""
         camera_moves = [
-            "[左移]", "[右移]", "[左摇]", "[右摇]", "[推进]", "[拉远]",
-            "[上升]", "[下降]", "[上摇]", "[下摇]", "[变焦推近]",
-            "[变焦拉远]", "[晃动]", "[跟随]", "[固定]"
+            "[左移]",
+            "[右移]",
+            "[左摇]",
+            "[右摇]",
+            "[推进]",
+            "[拉远]",
+            "[上升]",
+            "[下降]",
+            "[上摇]",
+            "[下摇]",
+            "[变焦推近]",
+            "[变焦拉远]",
+            "[晃动]",
+            "[跟随]",
+            "[固定]",
         ]
 
         detected = []
@@ -536,11 +583,11 @@ class MiniMaxClient:
             str: 处理后的图片URL或Base64 Data URL
         """
         # 如果已经是Data URL格式，直接返回
-        if image_input.startswith('data:image/'):
+        if image_input.startswith("data:image/"):
             return image_input
 
         # 如果是URL，进行简单验证
-        if image_input.startswith(('http://', 'https://')):
+        if image_input.startswith(("http://", "https://")):
             self._log(f"🌐 使用图片URL: {image_input}")
             return image_input
 
@@ -553,31 +600,42 @@ class MiniMaxClient:
             # 检查文件大小 (统一20MB限制，API会根据用途自行验证)
             file_size = image_path.stat().st_size
             if file_size > 20 * 1024 * 1024:  # 20MB
-                raise ValueError(f"图片文件过大: {file_size/1024/1024:.1f}MB (限制: 20MB，图生图建议10MB以内)")
+                raise ValueError(
+                    f"图片文件过大: {file_size / 1024 / 1024:.1f}MB (限制: 20MB，图生图建议10MB以内)"
+                )
 
             # 检查文件格式
             mime_type, _ = mimetypes.guess_type(str(image_path))
-            if mime_type not in ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']:
+            if mime_type not in ["image/jpeg", "image/jpg", "image/png", "image/webp"]:
                 raise ValueError(f"不支持的图片格式: {mime_type}")
 
             # 读取并编码为Base64
-            with open(image_path, 'rb') as f:
+            with open(image_path, "rb") as f:
                 image_data = f.read()
-                base64_data = base64.b64encode(image_data).decode('utf-8')
+                base64_data = base64.b64encode(image_data).decode("utf-8")
                 data_url = f"data:{mime_type};base64,{base64_data}"
 
-            self._log(f"📷 图片已编码: {image_path.name} ({len(image_data)/1024:.1f}KB)")
+            self._log(
+                f"📷 图片已编码: {image_path.name} ({len(image_data) / 1024:.1f}KB)"
+            )
             return data_url
 
         except Exception as e:
             self._log(f"❌ 图片处理失败: {e}", "ERROR")
             raise
 
-    def image_to_video(self, first_frame_image: str, prompt: str = "",
-                              model: str = "I2V-01", duration: int = 6,
-                              resolution: str = None, prompt_optimizer: bool = True,
-                              fast_pretreatment: bool = False, aigc_watermark: bool = False,
-                              callback_url: str = None) -> str:
+    def image_to_video(
+        self,
+        first_frame_image: str,
+        prompt: str = "",
+        model: str = "I2V-01",
+        duration: int = 6,
+        resolution: str = None,
+        prompt_optimizer: bool = True,
+        fast_pretreatment: bool = False,
+        aigc_watermark: bool = False,
+        callback_url: str = None,
+    ) -> str:
         """图生视频 - 将静态图片转换为动态视频
 
         Args:
@@ -606,12 +664,16 @@ class MiniMaxClient:
 
         # 智能选择默认分辨率
         if resolution is None:
-            if model in ['I2V-01-Director', 'I2V-01-live', 'I2V-01']:
-                resolution = '720P'
-            elif model in ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02']:
-                resolution = '768P'  # Hailuo系列默认768P以获得更好质量
+            if model in ["I2V-01-Director", "I2V-01-live", "I2V-01"]:
+                resolution = "720P"
+            elif model in [
+                "MiniMax-Hailuo-2.3",
+                "MiniMax-Hailuo-2.3-Fast",
+                "MiniMax-Hailuo-02",
+            ]:
+                resolution = "768P"  # Hailuo系列默认768P以获得更好质量
             else:
-                resolution = '720P'
+                resolution = "720P"
             self._log(f"🎯 自动选择分辨率: {resolution}")
 
         # 验证参数
@@ -637,14 +699,18 @@ class MiniMaxClient:
             "duration": duration,
             "resolution": resolution,
             "prompt_optimizer": prompt_optimizer,
-            "aigc_watermark": aigc_watermark
+            "aigc_watermark": aigc_watermark,
         }
 
         # 添加可选参数
         if prompt:
             data["prompt"] = prompt
 
-        if fast_pretreatment and model in ["MiniMax-Hailuo-2.3", "MiniMax-Hailuo-2.3-Fast", "MiniMax-Hailuo-02"]:
+        if fast_pretreatment and model in [
+            "MiniMax-Hailuo-2.3",
+            "MiniMax-Hailuo-2.3-Fast",
+            "MiniMax-Hailuo-02",
+        ]:
             data["fast_pretreatment"] = fast_pretreatment
             self._log("⚡ 启用快速预处理")
 
@@ -653,15 +719,21 @@ class MiniMaxClient:
             self._log(f"📞 设置回调URL: {callback_url}")
 
         response = self._request("POST", "video_generation", json=data)
-        task_id = response.get('task_id', '')
+        task_id = response.get("task_id", "")
         self._log(f"🎯 图生视频任务ID: {task_id}")
         return task_id
 
-    def start_end_to_video(self, first_frame_image: str, last_frame_image: str,
-                                prompt: str = "", duration: int = 6,
-                                resolution: str = None, prompt_optimizer: bool = True,
-                                aigc_watermark: bool = False,
-                                callback_url: str = None) -> str:
+    def start_end_to_video(
+        self,
+        first_frame_image: str,
+        last_frame_image: str,
+        prompt: str = "",
+        duration: int = 6,
+        resolution: str = None,
+        prompt_optimizer: bool = True,
+        aigc_watermark: bool = False,
+        callback_url: str = None,
+    ) -> str:
         """首尾帧生成视频 - 在指定首尾帧之间生成过渡视频
 
         Args:
@@ -686,15 +758,15 @@ class MiniMaxClient:
 
         # 智能选择默认分辨率（首尾帧仅支持768P和1080P）
         if resolution is None:
-            resolution = '768P'  # 默认使用768P以获得更好质量
+            resolution = "768P"  # 默认使用768P以获得更好质量
             self._log(f"🎯 自动选择分辨率: {resolution}")
 
         # 验证分辨率限制
-        if resolution not in ['768P', '1080P']:
+        if resolution not in ["768P", "1080P"]:
             raise ValueError("首尾帧视频生成仅支持768P和1080P分辨率")
 
         # 验证时长和分辨率组合
-        if resolution == '1080P' and duration != 6:
+        if resolution == "1080P" and duration != 6:
             raise ValueError("1080P分辨率仅支持6秒时长")
         if duration not in [6, 10]:
             raise ValueError("首尾帧视频生成仅支持6秒或10秒时长")
@@ -717,7 +789,7 @@ class MiniMaxClient:
             "duration": duration,
             "resolution": resolution,
             "prompt_optimizer": prompt_optimizer,
-            "aigc_watermark": aigc_watermark
+            "aigc_watermark": aigc_watermark,
         }
 
         # 添加可选参数
@@ -729,7 +801,7 @@ class MiniMaxClient:
             self._log(f"📞 设置回调URL: {callback_url}")
 
         response = self._request("POST", "video_generation", json=data)
-        task_id = response.get('task_id', '')
+        task_id = response.get("task_id", "")
         self._log(f"🎯 首尾帧视频任务ID: {task_id}")
 
         # 显示关键信息
@@ -739,12 +811,20 @@ class MiniMaxClient:
 
         return task_id
 
-    def video_advanced(self, prompt: str = "", model: str = "MiniMax-Hailuo-2.3",
-                             first_frame_image: str = None, last_frame_image: str = None,
-                             subject_image: str = None, duration: int = 10,
-                             resolution: str = "1080P", video_name: str = None,
-                             prompt_optimizer: bool = True, aigc_watermark: bool = False,
-                             callback_url: str = None) -> str:
+    def video_advanced(
+        self,
+        prompt: str = "",
+        model: str = "MiniMax-Hailuo-2.3",
+        first_frame_image: str = None,
+        last_frame_image: str = None,
+        subject_image: str = None,
+        duration: int = 10,
+        resolution: str = "1080P",
+        video_name: str = None,
+        prompt_optimizer: bool = True,
+        aigc_watermark: bool = False,
+        callback_url: str = None,
+    ) -> str:
         """高级视频生成，支持多种模式
 
         Args:
@@ -785,7 +865,7 @@ class MiniMaxClient:
                 prompt=prompt,
                 prompt_optimizer=prompt_optimizer,
                 aigc_watermark=aigc_watermark,
-                callback_url=callback_url
+                callback_url=callback_url,
             )
         elif first_frame_image and last_frame_image:
             # 首尾帧生成模式
@@ -798,7 +878,7 @@ class MiniMaxClient:
                 resolution=resolution,
                 prompt_optimizer=prompt_optimizer,
                 aigc_watermark=aigc_watermark,
-                callback_url=callback_url
+                callback_url=callback_url,
             )
         elif first_frame_image:
             # 图生视频模式
@@ -811,7 +891,7 @@ class MiniMaxClient:
                 resolution=resolution,
                 prompt_optimizer=prompt_optimizer,
                 aigc_watermark=aigc_watermark,
-                callback_url=callback_url
+                callback_url=callback_url,
             )
         else:
             # 文生视频模式
@@ -823,7 +903,7 @@ class MiniMaxClient:
                 resolution=resolution,
                 prompt_optimizer=prompt_optimizer,
                 aigc_watermark=aigc_watermark,
-                callback_url=callback_url
+                callback_url=callback_url,
             )
 
     def video_status(self, task_id: str) -> Dict[str, Any]:
@@ -849,7 +929,7 @@ class MiniMaxClient:
             - Fail: 失败
         """
         return self._request("GET", f"query/video_generation?task_id={task_id}")
-    
+
     def download_video(self, file_id: str, filename: str = None) -> str:
         """下载视频文件
 
@@ -873,43 +953,52 @@ class MiniMaxClient:
         # 获取文件信息
         file_response = self._request("GET", f"files/retrieve?file_id={file_id}")
 
-        if 'file' not in file_response:
+        if "file" not in file_response:
             raise Exception(f"无法获取文件信息: {file_response}")
 
-        file_info = file_response['file']
-        download_url = file_info['download_url']
+        file_info = file_response["file"]
+        download_url = file_info["download_url"]
 
         # 使用API返回的文件名，或自定义文件名
         if not filename:
-            original_name = file_info.get('filename', f'video_{file_id}.mp4')
+            original_name = file_info.get("filename", f"video_{file_id}.mp4")
             # 确保文件扩展名为.mp4
-            if not original_name.endswith('.mp4'):
-                original_name += '.mp4'
+            if not original_name.endswith(".mp4"):
+                original_name += ".mp4"
             filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{original_name}"
 
         # 显示文件信息
-        file_size = file_info.get('bytes', 0)
-        created_time = file_info.get('created_at', 0)
+        file_size = file_info.get("bytes", 0)
+        created_time = file_info.get("created_at", 0)
 
         self._log(f"📁 文件ID: {file_id}")
         if file_size > 0:
             file_size_mb = file_size / (1024 * 1024)
             self._log(f"📊 文件大小: {file_size_mb:.1f} MB")
-        self._log(f"📅 创建时间: {datetime.fromtimestamp(created_time).strftime('%Y-%m-%d %H:%M:%S')}" if created_time else "")
+        self._log(
+            f"📅 创建时间: {datetime.fromtimestamp(created_time).strftime('%Y-%m-%d %H:%M:%S')}"
+            if created_time
+            else ""
+        )
 
         # 下载文件
         import urllib.request
-        filepath = Path('./output/videos') / filename
+
+        filepath = Path("./output/videos") / filename
         filepath.parent.mkdir(exist_ok=True)
         self._log(f"🎯 正在下载: {filename}")
         urllib.request.urlretrieve(download_url, filepath)
         self._log(f"✅ 下载完成: {filepath}")
         return str(filepath)
 
-    def subject_reference_to_video(self, subject_image: str, prompt: str,
-                                   prompt_optimizer: bool = True,
-                                   aigc_watermark: bool = False,
-                                   callback_url: str = None) -> str:
+    def subject_reference_to_video(
+        self,
+        subject_image: str,
+        prompt: str,
+        prompt_optimizer: bool = True,
+        aigc_watermark: bool = False,
+        callback_url: str = None,
+    ) -> str:
         """主体参考视频生成
 
         基于提供的人物主体图片生成视频，保持人物面部特征
@@ -947,12 +1036,7 @@ class MiniMaxClient:
             "model": "S2V-01",
             "prompt": prompt.strip(),
             "prompt_optimizer": prompt_optimizer,
-            "subject_reference": [
-                {
-                    "type": "character",
-                    "image": [processed_image]
-                }
-            ]
+            "subject_reference": [{"type": "character", "image": [processed_image]}],
         }
 
         # 可选参数
@@ -974,11 +1058,20 @@ class MiniMaxClient:
 
         return task_id
 
-    def music(self, prompt: str = None, lyrics: str = None, stream: bool = False,
-                output_format: str = "hex", sample_rate: int = 44100,
-                bitrate: int = 256000, format: str = "mp3",
-                aigc_watermark: bool = False, model: str = "music-2.5+",
-                is_instrumental: bool = False, lyrics_optimizer: bool = False) -> str:
+    def music(
+        self,
+        prompt: str = None,
+        lyrics: str = None,
+        stream: bool = False,
+        output_format: str = "hex",
+        sample_rate: int = 44100,
+        bitrate: int = 256000,
+        format: str = "mp3",
+        aigc_watermark: bool = False,
+        model: str = "music-2.5+",
+        is_instrumental: bool = False,
+        lyrics_optimizer: bool = False,
+    ) -> str:
         """音乐生成 (music-2.5+ / music-2.5)
 
         Args:
@@ -1035,7 +1128,9 @@ class MiniMaxClient:
                 if not lyrics and not lyrics_optimizer:
                     print(f"❌ 歌词为必填参数（除非启用自动生成歌词）")
                     print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
-                    print(f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'")
+                    print(
+                        f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'"
+                    )
                     sys.exit(1)
 
                 if lyrics:
@@ -1057,7 +1152,9 @@ class MiniMaxClient:
             if not lyrics:
                 print(f"❌ 歌词为必填参数")
                 print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
-                print(f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'")
+                print(
+                    f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'"
+                )
                 sys.exit(1)
 
             if len(lyrics) < 1:
@@ -1092,7 +1189,9 @@ class MiniMaxClient:
             if not lyrics or len(lyrics) < 10:
                 print(f"❌ 歌词为必填参数")
                 print(f"💡 旧模型: 歌词长度限制[10, 3500]字符")
-                print(f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'")
+                print(
+                    f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'"
+                )
                 sys.exit(1)
 
             if len(lyrics) > 3500:
@@ -1133,8 +1232,8 @@ class MiniMaxClient:
             "audio_setting": {
                 "sample_rate": sample_rate,
                 "bitrate": bitrate,
-                "format": format
-            }
+                "format": format,
+            },
         }
 
         # 添加可选参数
@@ -1158,20 +1257,22 @@ class MiniMaxClient:
         if is_instrumental:
             self._log(f"🎼 生成类型: 纯音乐（无人声）")
         if prompt:
-            self._log(f"🎵 音乐描述: {prompt[:100] + '...' if len(prompt) > 100 else prompt}")
+            self._log(
+                f"🎵 音乐描述: {prompt[:100] + '...' if len(prompt) > 100 else prompt}"
+            )
         if lyrics:
             self._log(f"🎤 歌词长度: {len(lyrics)}字符")
         if lyrics_optimizer:
             self._log(f"🤖 自动生成歌词: 已启用")
-        self._log(f"📊 音频设置: {format}, {sample_rate}Hz, {bitrate//1000}kbps")
+        self._log(f"📊 音频设置: {format}, {sample_rate}Hz, {bitrate // 1000}kbps")
         self._log(f"🌊 流式传输: {'是' if stream else '否'}")
         self._log(f"🔗 返回格式: {output_format}")
 
         response = self._request("POST", "music_generation", json=data)
 
         # 检查音乐生成状态
-        music_data = response.get('data', {})
-        status = music_data.get('status', 0)
+        music_data = response.get("data", {})
+        status = music_data.get("status", 0)
 
         if status == 1:
             self._log(f"⏳ 音乐合成中，请稍候...")
@@ -1179,14 +1280,14 @@ class MiniMaxClient:
         elif status == 2:
             self._log(f"✅ 音乐生成完成")
 
-        audio_data = music_data.get('audio', '')
+        audio_data = music_data.get("audio", "")
 
         # 显示额外信息
-        extra_info = response.get('extra_info', {})
+        extra_info = response.get("extra_info", {})
         if extra_info:
-            duration_ms = extra_info.get('music_duration', 0)
+            duration_ms = extra_info.get("music_duration", 0)
             duration_sec = duration_ms / 1000 if duration_ms > 0 else 0
-            music_size = extra_info.get('music_size', 0)
+            music_size = extra_info.get("music_size", 0)
             music_size_kb = music_size / 1024 if music_size > 0 else 0
 
             self._log(f"⏱️  音乐时长: {duration_sec:.1f}秒")
@@ -1195,8 +1296,13 @@ class MiniMaxClient:
 
         return audio_data
 
-    def generate_lyrics(self, mode: str = "write_full_song", prompt: str = None,
-                      lyrics: str = None, title: str = None) -> Dict[str, Any]:
+    def generate_lyrics(
+        self,
+        mode: str = "write_full_song",
+        prompt: str = None,
+        lyrics: str = None,
+        title: str = None,
+    ) -> Dict[str, Any]:
         """歌词生成 (lyrics_generation)
 
         Args:
@@ -1228,9 +1334,7 @@ class MiniMaxClient:
             raise ValueError(f"歌词过长，最多支持3500字符，当前{len(lyrics)}字符")
 
         # 构建请求数据
-        data = {
-            "mode": mode
-        }
+        data = {"mode": mode}
 
         if prompt:
             data["prompt"] = prompt.strip()
@@ -1258,7 +1362,7 @@ class MiniMaxClient:
             "song_title": response.get("song_title", ""),
             "style_tags": response.get("style_tags", ""),
             "lyrics": response.get("lyrics", ""),
-            "base_resp": response.get("base_resp", {})
+            "base_resp": response.get("base_resp", {}),
         }
 
         # 显示生成结果信息
@@ -1309,14 +1413,18 @@ class MiniMaxClient:
         file_size = Path(file_path).stat().st_size
         max_size = 100 * 1024 * 1024  # 100MB
         if file_size > max_size:
-            raise ValueError(f"文件过大 ({file_size/1024/1024:.1f}MB)，最大支持{max_size/1024/1024}MB")
+            raise ValueError(
+                f"文件过大 ({file_size / 1024 / 1024:.1f}MB)，最大支持{max_size / 1024 / 1024}MB"
+            )
 
         # 验证文件格式
         file_ext = Path(file_path).suffix.lower()
         if purpose in ["voice_clone", "prompt_audio"]:
             valid_formats = [".mp3", ".m4a", ".wav"]
             if file_ext not in valid_formats:
-                raise ValueError(f"voice_clone/prompt_audio仅支持音频文件，当前格式: {file_ext}")
+                raise ValueError(
+                    f"voice_clone/prompt_audio仅支持音频文件，当前格式: {file_ext}"
+                )
         elif purpose == "t2a_async_input":
             valid_formats = [".text", ".zip"]
             if file_ext not in valid_formats:
@@ -1327,18 +1435,18 @@ class MiniMaxClient:
 
         url = f"{self.base_url}/files/upload"
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
+            "Authorization": f"Bearer {self.api_key}",
         }
 
         # 准备文件数据
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             files = {
-                'file': (Path(file_path).name, f, 'application/octet-stream'),
-                'purpose': (None, purpose)
+                "file": (Path(file_path).name, f, "application/octet-stream"),
+                "purpose": (None, purpose),
             }
 
             self._log(f"📋 文件用途: {purpose}")
-            self._log(f"📊 文件大小: {file_size/1024:.1f} KB")
+            self._log(f"📊 文件大小: {file_size / 1024:.1f} KB")
             self._log(f"📄 文件格式: {file_ext}")
 
             try:
@@ -1346,21 +1454,25 @@ class MiniMaxClient:
                 response.raise_for_status()
                 result = response.json()
 
-                if 'base_resp' in result and result['base_resp']['status_code'] != 0:
-                    error_msg = result['base_resp'].get('status_msg', 'Unknown error')
+                if "base_resp" in result and result["base_resp"]["status_code"] != 0:
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
                     raise Exception(f"文件上传失败: {error_msg}")
 
-                file_info = result.get('file', {})
-                file_id = file_info.get('file_id', '')
-                filename = file_info.get('filename', '')
-                bytes_size = file_info.get('bytes', 0)
-                created_at = file_info.get('created_at', 0)
+                file_info = result.get("file", {})
+                file_id = file_info.get("file_id", "")
+                filename = file_info.get("filename", "")
+                bytes_size = file_info.get("bytes", 0)
+                created_at = file_info.get("created_at", 0)
 
                 self._log(f"✅ 文件上传成功")
                 self._log(f"📁 文件ID: {file_id}")
                 self._log(f"📄 文件名: {filename}")
-                self._log(f"📊 大小: {bytes_size/1024:.1f} KB")
-                self._log(f"📅 上传时间: {datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')}" if created_at else "")
+                self._log(f"📊 大小: {bytes_size / 1024:.1f} KB")
+                self._log(
+                    f"📅 上传时间: {datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')}"
+                    if created_at
+                    else ""
+                )
 
                 return result
 
@@ -1394,15 +1506,11 @@ class MiniMaxClient:
                 raise ValueError(f"无效的purpose: {purpose}，可选值: {valid_purposes}")
 
             # 构建查询参数
-            params = {'purpose': purpose}
+            params = {"purpose": purpose}
 
-            return self._request(
-                'GET',
-                '/files/list',
-                params=params
-            )
+            return self._request("GET", "/files/list", params=params)
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def retrieve_file(self, file_id: str) -> Dict[str, Any]:
         """
@@ -1415,14 +1523,10 @@ class MiniMaxClient:
             包含文件详细信息的字典
         """
         try:
-            params = {'file_id': file_id}
-            return self._request(
-                'GET',
-                '/files/retrieve',
-                params=params
-            )
+            params = {"file_id": file_id}
+            return self._request("GET", "/files/retrieve", params=params)
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def download_file(self, file_id: str, save_path: str = None) -> str:
         """
@@ -1442,27 +1546,29 @@ class MiniMaxClient:
 
             # 首先获取文件信息
             file_info = self.retrieve_file(file_id)
-            if 'error' in file_info:
+            if "error" in file_info:
                 raise Exception(f"获取文件信息失败: {file_info['error']}")
 
-            file_data = file_info.get('file', {})
-            original_filename = file_data.get('filename', f'file_{file_id}')
+            file_data = file_info.get("file", {})
+            original_filename = file_data.get("filename", f"file_{file_id}")
             # 使用 文件ID_原文件名 格式避免覆盖
             filename = f"{file_id}_{original_filename}"
 
             # 构建下载URL
-            params = {'file_id': file_id}
+            params = {"file_id": file_id}
             download_url = f"{self.base_url}/files/retrieve_content"
-            headers = {'Authorization': f'Bearer {self.api_key}'}
+            headers = {"Authorization": f"Bearer {self.api_key}"}
 
             self._log(f"📥 开始下载文件: {filename}")
 
-            response = requests.get(download_url, headers=headers, params=params, stream=True, timeout=300)
+            response = requests.get(
+                download_url, headers=headers, params=params, stream=True, timeout=300
+            )
             response.raise_for_status()
 
             # 确定保存路径
             if save_path is None:
-                output_dir = Path('./output/downloads')
+                output_dir = Path("./output/downloads")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 save_path = output_dir / filename
             else:
@@ -1470,14 +1576,14 @@ class MiniMaxClient:
                 save_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 写入文件
-            with open(save_path, 'wb') as f:
+            with open(save_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
 
             file_size = save_path.stat().st_size
             self._log(f"✅ 文件下载成功: {save_path}")
-            self._log(f"📊 文件大小: {file_size/1024/1024:.2f} MB")
+            self._log(f"📊 文件大小: {file_size / 1024 / 1024:.2f} MB")
 
             return str(save_path)
 
@@ -1499,7 +1605,13 @@ class MiniMaxClient:
         """
         try:
             # 参数验证
-            valid_purposes = ["voice_clone", "prompt_audio", "t2a_async", "t2a_async_input", "video_generation"]
+            valid_purposes = [
+                "voice_clone",
+                "prompt_audio",
+                "t2a_async",
+                "t2a_async_input",
+                "video_generation",
+            ]
             if purpose not in valid_purposes:
                 raise ValueError(f"无效的purpose: {purpose}，可选值: {valid_purposes}")
 
@@ -1511,23 +1623,18 @@ class MiniMaxClient:
 
             # 删除接口需要使用 multipart/form-data 格式
             # 删除接口需要使用 multipart/form-data 格式
-            data = {
-                'file_id': file_id_int,
-                'purpose': purpose
-            }
+            data = {"file_id": file_id_int, "purpose": purpose}
 
             self._log(f"🗑️  开始删除文件: {file_id}")
 
-            result = self._request(
-                'POST',
-                '/files/delete',
-                json=data
-            )
+            result = self._request("POST", "/files/delete", json=data)
 
-            if 'base_resp' in result and result['base_resp']['status_code'] == 0:
+            if "base_resp" in result and result["base_resp"]["status_code"] == 0:
                 self._log(f"✅ 文件删除成功: {file_id}")
             else:
-                error_msg = result.get('base_resp', {}).get('status_msg', 'Unknown error')
+                error_msg = result.get("base_resp", {}).get(
+                    "status_msg", "Unknown error"
+                )
                 self._log(f"❌ 文件删除失败: {error_msg}")
 
             return result
@@ -1535,17 +1642,32 @@ class MiniMaxClient:
         except Exception as e:
             error_msg = f"文件删除失败: {str(e)}"
             self._log(error_msg)
-            return {'error': error_msg}
+            return {"error": error_msg}
 
-    def tts(self, text: str, voice_id: str = "female-chengshu", emotion: str = None,
-               model: str = "speech-2.8-hd",
-               speed: float = 1.0, vol: float = 1.0, pitch: int = 0,
-               sample_rate: int = 32000, format: str = "mp3", bitrate: int = 128000,
-               channel: int = 1, stream: bool = False, language_boost: str = None,
-               subtitle_enable: bool = False, output_format: str = "hex",
-               text_normalization: bool = False, latex_read: bool = False,
-               force_cbr: bool = False, continuous_sound: bool = False,
-               voice_modify: dict = None, aigc_watermark: bool = False) -> str:
+    def tts(
+        self,
+        text: str,
+        voice_id: str = "female-chengshu",
+        emotion: str = None,
+        model: str = "speech-2.8-hd",
+        speed: float = 1.0,
+        vol: float = 1.0,
+        pitch: int = 0,
+        sample_rate: int = 32000,
+        format: str = "mp3",
+        bitrate: int = 128000,
+        channel: int = 1,
+        stream: bool = False,
+        language_boost: str = None,
+        subtitle_enable: bool = False,
+        output_format: str = "hex",
+        text_normalization: bool = False,
+        latex_read: bool = False,
+        force_cbr: bool = False,
+        continuous_sound: bool = False,
+        voice_modify: dict = None,
+        aigc_watermark: bool = False,
+    ) -> str:
         """文本转语音（支持8个模型和完整参数）
 
         Args:
@@ -1578,8 +1700,14 @@ class MiniMaxClient:
         self._log(f"🎤 开始语音合成 (模型: {model})...")
 
         # 模型验证（仅保留 speech-02 及以后的新模型）
-        valid_models = ["speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo",
-                       "speech-02-hd", "speech-02-turbo"]
+        valid_models = [
+            "speech-2.8-hd",
+            "speech-2.8-turbo",
+            "speech-2.6-hd",
+            "speech-2.6-turbo",
+            "speech-02-hd",
+            "speech-02-turbo",
+        ]
         if model not in valid_models:
             raise ValueError(f"模型必须是{valid_models}之一")
 
@@ -1605,14 +1733,28 @@ class MiniMaxClient:
 
         # 情感验证（仅在指定 emotion 时验证）
         if emotion is not None:
-            valid_emotions = ["happy", "sad", "angry", "fearful", "disgusted",
-                             "surprised", "calm", "fluent", "whisper"]
+            valid_emotions = [
+                "happy",
+                "sad",
+                "angry",
+                "fearful",
+                "disgusted",
+                "surprised",
+                "calm",
+                "fluent",
+                "whisper",
+            ]
             if emotion not in valid_emotions:
                 raise ValueError(f"情感必须是{valid_emotions}之一")
 
             # fluent/whisper 仅对特定模型生效
-            if emotion in ["fluent", "whisper"] and model not in ["speech-2.6-hd", "speech-2.6-turbo"]:
-                self._log(f"⚠️ {emotion}情感仅对 speech-2.6-hd/speech-2.6-turbo 生效", "WARN")
+            if emotion in ["fluent", "whisper"] and model not in [
+                "speech-2.6-hd",
+                "speech-2.6-turbo",
+            ]:
+                self._log(
+                    f"⚠️ {emotion}情感仅对 speech-2.6-hd/speech-2.6-turbo 生效", "WARN"
+                )
 
         # output_format 验证
         if stream and output_format == "url":
@@ -1625,7 +1767,7 @@ class MiniMaxClient:
             "vol": vol,
             "pitch": pitch,
             "text_normalization": text_normalization,
-            "latex_read": latex_read
+            "latex_read": latex_read,
         }
 
         # 仅在明确指定 emotion 时才添加（让模型自动匹配）
@@ -1641,10 +1783,10 @@ class MiniMaxClient:
                 "sample_rate": sample_rate,
                 "format": format,
                 "bitrate": bitrate,
-                "channel": channel
+                "channel": channel,
             },
             "subtitle_enable": subtitle_enable,
-            "output_format": output_format
+            "output_format": output_format,
         }
 
         # 添加可选参数
@@ -1664,9 +1806,7 @@ class MiniMaxClient:
             data["aigc_watermark"] = True
 
         if stream:
-            data["stream_options"] = {
-                "exclude_aggregated_audio": False
-            }
+            data["stream_options"] = {"exclude_aggregated_audio": False}
             # force_cbr 仅在流式+mp3时生效
             if format == "mp3" and force_cbr:
                 data["audio_setting"]["force_cbr"] = True
@@ -1678,10 +1818,10 @@ class MiniMaxClient:
             # 流式响应处理
             self._log("📡 流式语音合成完成")
             # TODO: 实现流式音频合并
-            return response.get('data', {}).get('audio', '')
+            return response.get("data", {}).get("audio", "")
         else:
-            audio_data = response.get('data', {}).get('audio', '')
-            subtitle_file = response.get('data', {}).get('subtitle_file', '')
+            audio_data = response.get("data", {}).get("audio", "")
+            subtitle_file = response.get("data", {}).get("subtitle_file", "")
             self._log("🗣️ 语音合成完成")
 
             # 显示字幕信息
@@ -1689,21 +1829,27 @@ class MiniMaxClient:
                 self._log(f"📝 字幕文件: {subtitle_file}")
 
             # 显示音频信息
-            extra_info = response.get('extra_info', {})
+            extra_info = response.get("extra_info", {})
             if extra_info:
-                self._log(f"📊 音频信息: 时长{extra_info.get('audio_length', 0)//1000}秒, "
-                         f"大小{extra_info.get('audio_size', 0)//1024}KB, "
-                         f"字数{extra_info.get('word_count', 0)}")
+                self._log(
+                    f"📊 音频信息: 时长{extra_info.get('audio_length', 0) // 1000}秒, "
+                    f"大小{extra_info.get('audio_size', 0) // 1024}KB, "
+                    f"字数{extra_info.get('word_count', 0)}"
+                )
 
             return audio_data
 
-    def tts_advanced(self, text: str, voice_id: str = "female-chengshu",
-                           pronunciation_dict: dict = None,
-                           timber_weights: list = None,
-                           voice_modify: dict = None,
-                           aigc_watermark: bool = False,
-                           text_normalization: bool = False,
-                           latex_read: bool = False) -> str:
+    def tts_advanced(
+        self,
+        text: str,
+        voice_id: str = "female-chengshu",
+        pronunciation_dict: dict = None,
+        timber_weights: list = None,
+        voice_modify: dict = None,
+        aigc_watermark: bool = False,
+        text_normalization: bool = False,
+        latex_read: bool = False,
+    ) -> str:
         """高级文本转语音，支持音色混合、发音字典、音效等高级功能
 
         Args:
@@ -1727,22 +1873,24 @@ class MiniMaxClient:
             "text": text,
             "stream": False,
             "voice_setting": {
-                "voice_id": voice_id if not timber_weights else "",  # 混合音色时voice_id为空
+                "voice_id": voice_id
+                if not timber_weights
+                else "",  # 混合音色时voice_id为空
                 "emotion": "calm",
                 "speed": 1.0,
                 "vol": 1.0,
                 "pitch": 0,
                 "text_normalization": text_normalization,
-                "latex_read": latex_read
+                "latex_read": latex_read,
             },
             "audio_setting": {
                 "sample_rate": 32000,
                 "format": "mp3",
                 "bitrate": 128000,
-                "channel": 1
+                "channel": 1,
             },
             "aigc_watermark": aigc_watermark,
-            "output_format": "hex"
+            "output_format": "hex",
         }
 
         # 添加可选参数
@@ -1756,21 +1904,24 @@ class MiniMaxClient:
             data["voice_modify"] = voice_modify
 
         response = self._request("POST", "t2a_v2", json=data)
-        audio_url = response.get('data', {}).get('audio', '')
+        audio_url = response.get("data", {}).get("audio", "")
         self._log("🎭 高级语音合成完成")
 
         # 显示高级功能信息
         if timber_weights:
             self._log(f"🎵 音色混合: {len(timber_weights)}种音色")
         if pronunciation_dict:
-            self._log(f"📝 发音字典: {len(pronunciation_dict.get('tone', []))}个自定义发音")
+            self._log(
+                f"📝 发音字典: {len(pronunciation_dict.get('tone', []))}个自定义发音"
+            )
         if voice_modify:
             self._log(f"🎛️ 音效处理: {list(voice_modify.keys())}")
 
         return audio_url
 
-    def tts_stream(self, text: str, voice_id: str = "female-chengshu",
-                         callback_func=None, **kwargs) -> str:
+    def tts_stream(
+        self, text: str, voice_id: str = "female-chengshu", callback_func=None, **kwargs
+    ) -> str:
         """流式文本转语音
 
         Args:
@@ -1797,93 +1948,111 @@ class MiniMaxClient:
     def list_voices(self, voice_type: str = "all") -> Dict[str, Any]:
         """查询可用音色列表"""
         self._log("🔍 查询可用音色列表...")
-        
+
         # 检查缓存
         cache_file = Path("./cache/voices.json")
         cache_file.parent.mkdir(exist_ok=True)
-        
+
         # 缓存有效期：2小时
         cache_valid = False
         if cache_file.exists():
             try:
-                with open(cache_file, 'r', encoding='utf-8') as f:
+                with open(cache_file, "r", encoding="utf-8") as f:
                     cache_data = json.load(f)
-                    if cache_data.get('voice_type') == voice_type:
-                        cache_time = datetime.fromisoformat(cache_data.get('timestamp', ''))
-                        if (datetime.now() - cache_time).total_seconds() < 7200:  # 2小时
+                    if cache_data.get("voice_type") == voice_type:
+                        cache_time = datetime.fromisoformat(
+                            cache_data.get("timestamp", "")
+                        )
+                        if (
+                            datetime.now() - cache_time
+                        ).total_seconds() < 7200:  # 2小时
                             self._log("📋 使用缓存数据")
-                            return cache_data.get('data', {})
+                            return cache_data.get("data", {})
             except Exception:
                 pass
-        
+
         # API支持的参数映射（根据官方文档）
         valid_types = {
-            'system': 'system',
-            'cloning': 'voice_cloning',
-            'generation': 'voice_generation',
-            'all': 'all'
+            "system": "system",
+            "cloning": "voice_cloning",
+            "generation": "voice_generation",
+            "all": "all",
         }
 
         # 使用有效的API参数
-        api_param = valid_types.get(voice_type, 'all')
-        
+        api_param = valid_types.get(voice_type, "all")
+
         # 调用API获取最新数据
         url = "https://api.minimaxi.com/v1/get_voice"
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
         }
-        data = {'voice_type': api_param}
-        
+        data = {"voice_type": api_param}
+
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
             result = response.json()
-            
+
             # 缓存结果
             cache_data = {
-                'voice_type': voice_type,
-                'timestamp': datetime.now().isoformat(),
-                'data': result
+                "voice_type": voice_type,
+                "timestamp": datetime.now().isoformat(),
+                "data": result,
             }
-            with open(cache_file, 'w', encoding='utf-8') as f:
+            with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            
+
             self._log("✅ 音色列表已更新并缓存")
             return result
-            
+
         except Exception as e:
             # 如果API失败，尝试使用缓存（即使过期也显示提示）
             if cache_file.exists():
                 try:
-                    with open(cache_file, 'r', encoding='utf-8') as f:
+                    with open(cache_file, "r", encoding="utf-8") as f:
                         cache_data = json.load(f)
                         self._log("⚠️ 使用过期缓存数据，建议稍后刷新", "WARN")
-                        return cache_data.get('data', {})
+                        return cache_data.get("data", {})
                 except Exception:
                     pass
-            
+
             self._log(f"❌ 获取音色列表失败: {e}", "ERROR")
             # 返回默认音色列表，确保UI正常显示
             return {
                 "voices": [
-                    {"voice_id": "female-chengshu", "name": "成熟女声", "type": "system"},
+                    {
+                        "voice_id": "female-chengshu",
+                        "name": "成熟女声",
+                        "type": "system",
+                    },
                     {"voice_id": "male-chengshu", "name": "成熟男声", "type": "system"},
                     {"voice_id": "female-yujie", "name": "御姐女声", "type": "system"},
                     {"voice_id": "male-yujie", "name": "磁性男声", "type": "system"},
-                    {"voice_id": "female-tianmei", "name": "甜美女声", "type": "system"},
-                    {"voice_id": "male-ketang", "name": "课堂男声", "type": "system"}
+                    {
+                        "voice_id": "female-tianmei",
+                        "name": "甜美女声",
+                        "type": "system",
+                    },
+                    {"voice_id": "male-ketang", "name": "课堂男声", "type": "system"},
                 ]
             }
 
-    def voice_clone(self, file_id: int, voice_id: str,
-                   prompt_audio: int = None, prompt_text: str = None,
-                   text: str = None, model: str = "speech-2.8-hd",
-                   language_boost: str = None,
-                   need_noise_reduction: bool = False,
-                   need_volume_normalization: bool = False,
-                   aigc_watermark: bool = False,
-                   continuous_sound: bool = False) -> Dict[str, Any]:
+    def voice_clone(
+        self,
+        file_id: int,
+        voice_id: str,
+        prompt_audio: int = None,
+        prompt_text: str = None,
+        text: str = None,
+        model: str = "speech-2.8-hd",
+        language_boost: str = None,
+        need_noise_reduction: bool = False,
+        need_volume_normalization: bool = False,
+        aigc_watermark: bool = False,
+        continuous_sound: bool = False,
+    ) -> Dict[str, Any]:
         """音色快速复刻
 
         Args:
@@ -1925,8 +2094,11 @@ class MiniMaxClient:
 
         # 验证 voice_id 格式
         import re
-        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$', voice_id):
-            raise ValueError("voice_id 格式错误：首字符必须为英文字母，只允许数字、字母、-、_，末位不可为 - 或 _")
+
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$", voice_id):
+            raise ValueError(
+                "voice_id 格式错误：首字符必须为英文字母，只允许数字、字母、-、_，末位不可为 - 或 _"
+            )
 
         if len(voice_id) < 8 or len(voice_id) > 256:
             raise ValueError("voice_id 长度必须在 8-256 之间")
@@ -1937,14 +2109,14 @@ class MiniMaxClient:
             "voice_id": voice_id,
             "need_noise_reduction": need_noise_reduction,
             "need_volume_normalization": need_volume_normalization,
-            "aigc_watermark": aigc_watermark
+            "aigc_watermark": aigc_watermark,
         }
 
         # 添加可选参数
         if prompt_audio and prompt_text:
             data["clone_prompt"] = {
                 "prompt_audio": prompt_audio,
-                "prompt_text": prompt_text
+                "prompt_text": prompt_text,
             }
             self._log("📝 使用示例音频增强音色相似度")
 
@@ -1970,7 +2142,7 @@ class MiniMaxClient:
         response = self._request("POST", "voice_clone", json=data)
 
         # 处理响应
-        demo_audio = response.get('demo_audio', '')
+        demo_audio = response.get("demo_audio", "")
         if demo_audio:
             self._log("✅ 音色复刻成功")
             self._log(f"🎵 试听音频: {demo_audio}")
@@ -1978,16 +2150,21 @@ class MiniMaxClient:
             self._log("✅ 音色复刻成功（无试听音频）")
 
         # 风控检查
-        input_sensitive = response.get('input_sensitive', {})
+        input_sensitive = response.get("input_sensitive", {})
         if input_sensitive:
-            sensitive_type = input_sensitive.get('type', 0)
+            sensitive_type = input_sensitive.get("type", 0)
             if sensitive_type != 0:
                 self._log(f"⚠️ 警告：输入音频命中风控（类型: {sensitive_type}）", "WARN")
 
         return response
 
-    def voice_design(self, prompt: str, preview_text: str,
-                    voice_id: str = None, aigc_watermark: bool = False) -> Dict[str, Any]:
+    def voice_design(
+        self,
+        prompt: str,
+        preview_text: str,
+        voice_id: str = None,
+        aigc_watermark: bool = False,
+    ) -> Dict[str, Any]:
         """音色设计 - 通过文本描述生成自定义音色
 
         Args:
@@ -2011,7 +2188,7 @@ class MiniMaxClient:
         data = {
             "prompt": prompt,
             "preview_text": preview_text,
-            "aigc_watermark": aigc_watermark
+            "aigc_watermark": aigc_watermark,
         }
 
         if voice_id:
@@ -2021,13 +2198,15 @@ class MiniMaxClient:
             self._log("🎭 音色ID: 自动生成")
 
         self._log(f"📝 音色描述: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
-        self._log(f"🎧 试听文本: {preview_text[:100]}{'...' if len(preview_text) > 100 else ''}")
+        self._log(
+            f"🎧 试听文本: {preview_text[:100]}{'...' if len(preview_text) > 100 else ''}"
+        )
 
         response = self._request("POST", "voice_design", json=data)
 
         # 处理响应
-        result_voice_id = response.get('voice_id', '')
-        trial_audio = response.get('trial_audio', '')
+        result_voice_id = response.get("voice_id", "")
+        trial_audio = response.get("trial_audio", "")
 
         self._log("✅ 音色设计成功")
         self._log(f"🎭 音色ID: {result_voice_id}")
@@ -2035,14 +2214,15 @@ class MiniMaxClient:
 
         return response
 
+
 class FileManager:
     """文件管理"""
-    
+
     def __init__(self):
-        self.base_dir = Path('./output')
+        self.base_dir = Path("./output")
         self.base_dir.mkdir(exist_ok=True)
 
-        for subdir in ['audio', 'images', 'videos', 'music', 'podcasts']:
+        for subdir in ["audio", "images", "videos", "music", "podcasts"]:
             (self.base_dir / subdir).mkdir(exist_ok=True)
 
     def read_input(self, content: str, param_name: str = "内容") -> str:
@@ -2058,9 +2238,9 @@ class FileManager:
         Raises:
             SystemExit: 文件不存在时退出
         """
-        if content.endswith(('.txt', '.md')):
+        if content.endswith((".txt", ".md")):
             if Path(content).exists():
-                with open(content, 'r', encoding='utf-8') as f:
+                with open(content, "r", encoding="utf-8") as f:
                     return f.read()
             else:
                 print(f"❌ {param_name}文件不存在: {content}")
@@ -2069,19 +2249,20 @@ class FileManager:
 
     def generate_timestamp(self) -> str:
         """生成时间戳字符串"""
-        return datetime.now().strftime('%Y%m%d_%H%M%S')
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def save_file(self, data: str, filename: str, subdir: str) -> str:
         """保存文件（支持URL或十六进制数据）"""
         filepath = self.base_dir / subdir / filename
 
-        if data.startswith('http'):
+        if data.startswith("http"):
             # 下载URL
             import urllib.request
+
             urllib.request.urlretrieve(data, filepath)
         else:
             # 保存十六进制数据
-            with open(filepath, 'wb') as f:
+            with open(filepath, "wb") as f:
                 f.write(bytes.fromhex(data))
 
         return str(filepath)
@@ -2091,7 +2272,7 @@ class FileManager:
         filepath = self.base_dir / subdir / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
 
         return str(filepath)
@@ -2101,12 +2282,12 @@ class FileManager:
         path = self.base_dir / subdir
         path.mkdir(parents=True, exist_ok=True)
         return path / filename if filename else path
-    
+
     def play_audio(self, filepath: str):
         """自动播放音频文件"""
         import subprocess
         import platform
-        
+
         try:
             system = platform.system()
             if system == "Windows":
@@ -2120,35 +2301,67 @@ class FileManager:
         except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"📁 音频已保存，请手动播放: {filepath}")
 
+
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='MiniMax AI 工具')
-    
+    parser = argparse.ArgumentParser(description="MiniMax AI 工具")
+
     # 🎯 核心功能（参数支持内容或.txt/.md文件路径）
-    generate_group = parser.add_argument_group('核心功能（参数支持内容或.txt/.md文件路径）')
-    generate_group.add_argument('-c', '--chat', metavar='对话内容', help='AI智能对话')
-    generate_group.add_argument('-i', '--image', metavar='图像描述', help='AI图像生成')
-    generate_group.add_argument('-v', '--video', metavar='视频描述', help='AI视频生成')
-    generate_group.add_argument('-m', '--music', metavar='音乐描述', help='AI音乐生成')
-    generate_group.add_argument('-t', '--tts', metavar='语音文本', help='文本转语音')
-    generate_group.add_argument('-l', '--lyrics', metavar='歌词提示', help='AI歌词生成（支持完整创作或续写）')
+    generate_group = parser.add_argument_group(
+        "核心功能（参数支持内容或.txt/.md文件路径）"
+    )
+    generate_group.add_argument("-c", "--chat", metavar="对话内容", help="AI智能对话")
+    generate_group.add_argument("-i", "--image", metavar="图像描述", help="AI图像生成")
+    generate_group.add_argument("-v", "--video", metavar="视频描述", help="AI视频生成")
+    generate_group.add_argument("-m", "--music", metavar="音乐描述", help="AI音乐生成")
+    generate_group.add_argument("-t", "--tts", metavar="语音文本", help="文本转语音")
+    generate_group.add_argument(
+        "-l", "--lyrics", metavar="歌词提示", help="AI歌词生成（支持完整创作或续写）"
+    )
 
     # ⚙️ 通用选项
-    common_group = parser.add_argument_group('通用选项')
-    common_group.add_argument('-I', '--interactive', action='store_true', help='交互模式')
-    common_group.add_argument('-V', '--verbose', action='store_true', help='显示详细日志')
-    common_group.add_argument('-P', '--play', action='store_true', help='生成后自动播放音频')
+    common_group = parser.add_argument_group("通用选项")
+    common_group.add_argument(
+        "-I", "--interactive", action="store_true", help="交互模式"
+    )
+    common_group.add_argument(
+        "-V", "--verbose", action="store_true", help="显示详细日志"
+    )
+    common_group.add_argument(
+        "-P", "--play", action="store_true", help="生成后自动播放音频"
+    )
 
     # 🤖 文本生成/对话选项
-    chat_group = parser.add_argument_group('文本生成/对话选项')
-    chat_group.add_argument('--chat-model', default='MiniMax-M2.5',
-                           choices=['M2-her', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.1', 'MiniMax-M2.1-highspeed', 'MiniMax-M2.1-lightning', 'MiniMax-M2'],
-                           help='模型选择：M2-her=对话/角色扮演, MiniMax-M2.5=顶尖性能(60 TPS), M2.5-highspeed=极速版(100 TPS), M2系列=编程/Agent工作流（需配合--anthropic-api）')
-    chat_group.add_argument('--anthropic-api', action='store_true',
-                           help='使用 Anthropic API 兼容接口（推荐用于 MiniMax-M2 系列，支持思考过程显示）')
-    chat_group.add_argument('--show-thinking', action='store_true',
-                           help='显示模型思考过程（仅 --anthropic-api 支持）')
-    chat_group.add_argument('--system-prompt', type=str, help='系统提示词（定义AI角色和行为）')
+    chat_group = parser.add_argument_group("文本生成/对话选项")
+    chat_group.add_argument(
+        "--chat-model",
+        default="MiniMax-M2.7",
+        choices=[
+            "M2-her",
+            "MiniMax-M2.7",
+            "MiniMax-M2.7-highspeed",
+            "MiniMax-M2.5",
+            "MiniMax-M2.5-highspeed",
+            "MiniMax-M2.1",
+            "MiniMax-M2.1-highspeed",
+            "MiniMax-M2.1-lightning",
+            "MiniMax-M2",
+        ],
+        help="模型选择：M2-her=对话/角色扮演, MiniMax-M2.7=最新旗舰(60 TPS), M2.7-highspeed=极速版(100 TPS), M2.5=性价比, M2系列=编程/Agent工作流（需配合--anthropic-api）",
+    )
+    chat_group.add_argument(
+        "--anthropic-api",
+        action="store_true",
+        help="使用 Anthropic API 兼容接口（推荐用于 MiniMax-M2 系列，支持思考过程显示）",
+    )
+    chat_group.add_argument(
+        "--show-thinking",
+        action="store_true",
+        help="显示模型思考过程（仅 --anthropic-api 支持）",
+    )
+    chat_group.add_argument(
+        "--system-prompt", type=str, help="系统提示词（定义AI角色和行为）"
+    )
     # M2-her 专属参数（暂时注释，等待 API BUG 修复）
     # chat_group.add_argument('--user-system', type=str, metavar='TEXT',
     #                        help='用户角色设定（用于角色扮演场景定义用户身份，M2-her专属）')
@@ -2158,259 +2371,546 @@ def main():
     #                        help='示例用户消息（引导对话风格，M2-her专属）')
     # chat_group.add_argument('--sample-ai', type=str, metavar='TEXT',
     #                        help='示例AI回复（配合--sample-user使用，M2-her专属）')
-    chat_group.add_argument('--temperature', type=float, default=1.0,
-                           help='温度参数 (0.0-1.0]，默认1.0')
-    chat_group.add_argument('--top-p', type=float, default=1.0,
-                           help='核采样参数 (0.0-1.0]，默认1.0')
-    chat_group.add_argument('--max-tokens', type=int, default=1024,
-                           help='最大生成token数，M2-her上限2048，默认1024')
+    chat_group.add_argument(
+        "--temperature", type=float, default=1.0, help="温度参数 (0.0-1.0]，默认1.0"
+    )
+    chat_group.add_argument(
+        "--top-p", type=float, default=1.0, help="核采样参数 (0.0-1.0]，默认1.0"
+    )
+    chat_group.add_argument(
+        "--max-tokens",
+        type=int,
+        default=1024,
+        help="最大生成token数，M2-her上限2048，默认1024",
+    )
 
     # 🎨 图像生成选项
-    image_group = parser.add_argument_group('图像生成选项')
-    image_group.add_argument('--image-model', default='image-01', choices=['image-01', 'image-01-live'], help='图像生成模型，默认image-01')
-    image_group.add_argument('--n', type=int, default=1, choices=range(1, 10), help='生成图片数量 (1-9)，默认1')
-    image_group.add_argument('--aspect-ratio', default='1:1', choices=['1:1', '16:9', '4:3', '3:2', '2:3', '3:4', '9:16', '21:9'], help='图像宽高比，默认1:1')
-    image_group.add_argument('--seed', type=int, help='随机种子，相同种子生成相似图片')
-    image_group.add_argument('--width', type=int, help='图像宽度(像素)，512-2048且8的倍数，需与height同时设置')
-    image_group.add_argument('--height', type=int, help='图像高度(像素)，512-2048且8的倍数，需与width同时设置')
-    image_group.add_argument('--response-format', default='url', choices=['url', 'base64'], help='返回格式，默认url')
-    image_group.add_argument('--prompt-optimizer', action='store_true', help='启用prompt自动优化')
-    image_group.add_argument('--add-watermark', action='store_true', help='添加图片水印')
-    image_group.add_argument('--style-type', choices=['漫画', '元气', '中世纪', '水彩'], help='画风风格类型，仅image-01-live模型生效')
-    image_group.add_argument('--style-weight', type=float, default=0.8, help='画风权重(0-1]，默认0.8')
-    image_group.add_argument('--ref-image', help='参考图片路径或URL（配合 -i 实现图生图）')
+    image_group = parser.add_argument_group("图像生成选项")
+    image_group.add_argument(
+        "--image-model",
+        default="image-01",
+        choices=["image-01", "image-01-live"],
+        help="图像生成模型，默认image-01",
+    )
+    image_group.add_argument(
+        "--n",
+        type=int,
+        default=1,
+        choices=range(1, 10),
+        help="生成图片数量 (1-9)，默认1",
+    )
+    image_group.add_argument(
+        "--aspect-ratio",
+        default="1:1",
+        choices=["1:1", "16:9", "4:3", "3:2", "2:3", "3:4", "9:16", "21:9"],
+        help="图像宽高比，默认1:1",
+    )
+    image_group.add_argument("--seed", type=int, help="随机种子，相同种子生成相似图片")
+    image_group.add_argument(
+        "--width",
+        type=int,
+        help="图像宽度(像素)，512-2048且8的倍数，需与height同时设置",
+    )
+    image_group.add_argument(
+        "--height",
+        type=int,
+        help="图像高度(像素)，512-2048且8的倍数，需与width同时设置",
+    )
+    image_group.add_argument(
+        "--response-format",
+        default="url",
+        choices=["url", "base64"],
+        help="返回格式，默认url",
+    )
+    image_group.add_argument(
+        "--prompt-optimizer", action="store_true", help="启用prompt自动优化"
+    )
+    image_group.add_argument(
+        "--add-watermark", action="store_true", help="添加图片水印"
+    )
+    image_group.add_argument(
+        "--style-type",
+        choices=["漫画", "元气", "中世纪", "水彩"],
+        help="画风风格类型，仅image-01-live模型生效",
+    )
+    image_group.add_argument(
+        "--style-weight", type=float, default=0.8, help="画风权重(0-1]，默认0.8"
+    )
+    image_group.add_argument(
+        "--ref-image", help="参考图片路径或URL（配合 -i 实现图生图）"
+    )
 
     # 🎭 音色管理
-    voice_group = parser.add_argument_group('音色管理')
-    voice_group.add_argument('--list-voices', choices=['system', 'cloning', 'generation', 'all'],
-                            help='查询可用音色列表 (system:系统音色, cloning:快速复刻, generation:文生音色, all:全部)')
-    voice_group.add_argument('-r', '--refresh-voices', action='store_true', help='强制刷新音色缓存')
-    voice_group.add_argument('-f', '--filter-voices', type=str, help='过滤音色列表关键词')
+    voice_group = parser.add_argument_group("音色管理")
+    voice_group.add_argument(
+        "--list-voices",
+        choices=["system", "cloning", "generation", "all"],
+        help="查询可用音色列表 (system:系统音色, cloning:快速复刻, generation:文生音色, all:全部)",
+    )
+    voice_group.add_argument(
+        "-r", "--refresh-voices", action="store_true", help="强制刷新音色缓存"
+    )
+    voice_group.add_argument(
+        "-f", "--filter-voices", type=str, help="过滤音色列表关键词"
+    )
 
     # 🎤 音色快速复刻
-    clone_group = parser.add_argument_group('音色快速复刻')
-    clone_group.add_argument('--clone', type=str, metavar='VOICE_ID',
-                            help='音色快速复刻：指定目标音色ID')
-    clone_group.add_argument('--clone-file-id', type=int, metavar='FILE_ID',
-                            help='复刻音频的file_id（必填）')
-    clone_group.add_argument('--prompt-audio', type=int, metavar='FILE_ID',
-                            help='示例音频的file_id（用于增强相似度）')
-    clone_group.add_argument('--prompt-text', type=str, metavar='TEXT',
-                            help='示例音频对应的文本（需与prompt_audio同时提供）')
-    clone_group.add_argument('--demo-text', type=str, metavar='TEXT',
-                            help='复刻试听文本（最多1000字符）')
-    clone_group.add_argument('--demo-model', default='speech-2.8-hd',
-                            choices=['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-2.6-turbo',
-                                    'speech-02-hd', 'speech-02-turbo'],
-                            help='试听音频模型，默认speech-2.8-hd')
-    clone_group.add_argument('--clone-language-boost', metavar='LANGUAGE',
-                            help='语言增强（auto, Chinese, English等）')
-    clone_group.add_argument('--noise-reduction', action='store_true',
-                            help='开启音频降噪')
-    clone_group.add_argument('--volume-normalization', action='store_true',
-                            help='开启音量归一化')
-    clone_group.add_argument('--continuous-sound', action='store_true',
-                            help='启用子句自然衔接（仅 2.8 系列支持）')
+    clone_group = parser.add_argument_group("音色快速复刻")
+    clone_group.add_argument(
+        "--clone", type=str, metavar="VOICE_ID", help="音色快速复刻：指定目标音色ID"
+    )
+    clone_group.add_argument(
+        "--clone-file-id", type=int, metavar="FILE_ID", help="复刻音频的file_id（必填）"
+    )
+    clone_group.add_argument(
+        "--prompt-audio",
+        type=int,
+        metavar="FILE_ID",
+        help="示例音频的file_id（用于增强相似度）",
+    )
+    clone_group.add_argument(
+        "--prompt-text",
+        type=str,
+        metavar="TEXT",
+        help="示例音频对应的文本（需与prompt_audio同时提供）",
+    )
+    clone_group.add_argument(
+        "--demo-text", type=str, metavar="TEXT", help="复刻试听文本（最多1000字符）"
+    )
+    clone_group.add_argument(
+        "--demo-model",
+        default="speech-2.8-hd",
+        choices=[
+            "speech-2.8-hd",
+            "speech-2.8-turbo",
+            "speech-2.6-hd",
+            "speech-2.6-turbo",
+            "speech-02-hd",
+            "speech-02-turbo",
+        ],
+        help="试听音频模型，默认speech-2.8-hd",
+    )
+    clone_group.add_argument(
+        "--clone-language-boost",
+        metavar="LANGUAGE",
+        help="语言增强（auto, Chinese, English等）",
+    )
+    clone_group.add_argument(
+        "--noise-reduction", action="store_true", help="开启音频降噪"
+    )
+    clone_group.add_argument(
+        "--volume-normalization", action="store_true", help="开启音量归一化"
+    )
+    clone_group.add_argument(
+        "--continuous-sound",
+        action="store_true",
+        help="启用子句自然衔接（仅 2.8 系列支持）",
+    )
 
     # 🎨 音色设计
-    design_group = parser.add_argument_group('音色设计')
-    design_group.add_argument('--design', type=str, metavar='VOICE_ID',
-                             help='音色设计：指定目标音色ID（可选，不提供则自动生成）')
-    design_group.add_argument('--design-prompt', type=str, metavar='PROMPT',
-                             help='音色描述（必填），如：声音低沉富有磁性的播音员')
-    design_group.add_argument('--preview-text', type=str, metavar='TEXT',
-                             help='试听文本（必填），将收取2元/万字符费用')
+    design_group = parser.add_argument_group("音色设计")
+    design_group.add_argument(
+        "--design",
+        type=str,
+        metavar="VOICE_ID",
+        help="音色设计：指定目标音色ID（可选，不提供则自动生成）",
+    )
+    design_group.add_argument(
+        "--design-prompt",
+        type=str,
+        metavar="PROMPT",
+        help="音色描述（必填），如：声音低沉富有磁性的播音员",
+    )
+    design_group.add_argument(
+        "--preview-text",
+        type=str,
+        metavar="TEXT",
+        help="试听文本（必填），将收取2元/万字符费用",
+    )
 
     # 🎤 语音合成选项
-    tts_group = parser.add_argument_group('语音合成选项')
-    tts_group.add_argument('--voice', type=str, default="female-shaonv",
-                          help='指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)')
-    tts_group.add_argument('--tts-model', default='speech-2.8-hd',
-                          choices=['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-2.6-turbo',
-                                  'speech-02-hd', 'speech-02-turbo'],
-                          help='语音合成模型：2.8系列=高精度/自然度，2.6系列=极速版，02系列=经典版，默认speech-2.8-hd')
-    tts_group.add_argument('--emotion', default=None,
-                          choices=['happy', 'sad', 'angry', 'fearful', 'disgusted',
-                                  'surprised', 'calm', 'fluent', 'whisper'],
-                          help='语音情感控制（默认不指定，让模型自动匹配）')
-    tts_group.add_argument('--speed', type=float, default=1.0, help='语速 (0.5-2.0)，默认1.0')
-    tts_group.add_argument('--vol', type=float, default=1.0, help='音量 (0.1-10.0)，默认1.0')
-    tts_group.add_argument('--pitch', type=int, default=0, help='语调 (-12到12)，默认0')
-    tts_group.add_argument('--sample-rate', type=int, default=32000,
-                          choices=[8000, 16000, 22050, 24000, 32000, 44100],
-                          help='采样率，默认32000')
-    tts_group.add_argument('--format', default='mp3',
-                          choices=['mp3', 'pcm', 'flac', 'wav'],
-                          help='音频格式，默认mp3 (wav仅非流式)')
-    tts_group.add_argument('--bitrate', type=int, default=128000,
-                          choices=[32000, 64000, 128000, 256000],
-                          help='比特率，默认128000')
-    tts_group.add_argument('--channel', type=int, default=1, choices=[1, 2], help='声道数，默认1')
-    tts_group.add_argument('--stream', action='store_true', help='启用流式输出')
-    tts_group.add_argument('--language-boost', help='语言增强 (Chinese, English, auto等40种语言)')
-    tts_group.add_argument('--subtitle', action='store_true', help='启用字幕生成（仅非流式）')
-    tts_group.add_argument('--output-format', default='hex', choices=['hex', 'url'],
-                          help='输出格式，默认hex (流式仅支持hex)')
-    tts_group.add_argument('--text-normalization', action='store_true',
-                          help='启用文本规范化（提升数字阅读性能）')
-    tts_group.add_argument('--latex-read', action='store_true',
-                          help='启用LaTeX公式朗读（公式需用$包裹）')
-    tts_group.add_argument('--force-cbr', action='store_true',
-                          help='使用恒定比特率（仅流式+mp3生效）')
+    tts_group = parser.add_argument_group("语音合成选项")
+    tts_group.add_argument(
+        "--voice",
+        type=str,
+        default="female-shaonv",
+        help="指定音色ID (如: male-qn-jingying, female-yujie, female-shaonv)",
+    )
+    tts_group.add_argument(
+        "--tts-model",
+        default="speech-2.8-hd",
+        choices=[
+            "speech-2.8-hd",
+            "speech-2.8-turbo",
+            "speech-2.6-hd",
+            "speech-2.6-turbo",
+            "speech-02-hd",
+            "speech-02-turbo",
+        ],
+        help="语音合成模型：2.8系列=高精度/自然度，2.6系列=极速版，02系列=经典版，默认speech-2.8-hd",
+    )
+    tts_group.add_argument(
+        "--emotion",
+        default=None,
+        choices=[
+            "happy",
+            "sad",
+            "angry",
+            "fearful",
+            "disgusted",
+            "surprised",
+            "calm",
+            "fluent",
+            "whisper",
+        ],
+        help="语音情感控制（默认不指定，让模型自动匹配）",
+    )
+    tts_group.add_argument(
+        "--speed", type=float, default=1.0, help="语速 (0.5-2.0)，默认1.0"
+    )
+    tts_group.add_argument(
+        "--vol", type=float, default=1.0, help="音量 (0.1-10.0)，默认1.0"
+    )
+    tts_group.add_argument("--pitch", type=int, default=0, help="语调 (-12到12)，默认0")
+    tts_group.add_argument(
+        "--sample-rate",
+        type=int,
+        default=32000,
+        choices=[8000, 16000, 22050, 24000, 32000, 44100],
+        help="采样率，默认32000",
+    )
+    tts_group.add_argument(
+        "--format",
+        default="mp3",
+        choices=["mp3", "pcm", "flac", "wav"],
+        help="音频格式，默认mp3 (wav仅非流式)",
+    )
+    tts_group.add_argument(
+        "--bitrate",
+        type=int,
+        default=128000,
+        choices=[32000, 64000, 128000, 256000],
+        help="比特率，默认128000",
+    )
+    tts_group.add_argument(
+        "--channel", type=int, default=1, choices=[1, 2], help="声道数，默认1"
+    )
+    tts_group.add_argument("--stream", action="store_true", help="启用流式输出")
+    tts_group.add_argument(
+        "--language-boost", help="语言增强 (Chinese, English, auto等40种语言)"
+    )
+    tts_group.add_argument(
+        "--subtitle", action="store_true", help="启用字幕生成（仅非流式）"
+    )
+    tts_group.add_argument(
+        "--output-format",
+        default="hex",
+        choices=["hex", "url"],
+        help="输出格式，默认hex (流式仅支持hex)",
+    )
+    tts_group.add_argument(
+        "--text-normalization",
+        action="store_true",
+        help="启用文本规范化（提升数字阅读性能）",
+    )
+    tts_group.add_argument(
+        "--latex-read", action="store_true", help="启用LaTeX公式朗读（公式需用$包裹）"
+    )
+    tts_group.add_argument(
+        "--force-cbr", action="store_true", help="使用恒定比特率（仅流式+mp3生效）"
+    )
 
     # 🎵 歌词生成选项
-    lyrics_group = parser.add_argument_group('歌词生成选项')
-    lyrics_group.add_argument('--lyrics-mode', default='write_full_song',
-                           choices=['write_full_song', 'edit'],
-                           help='生成模式：write_full_song=完整歌曲创作，edit=编辑/续写（默认write_full_song）')
-    lyrics_group.add_argument('--lyrics-title', type=str, metavar='TITLE',
-                           help='歌曲标题（可选，不提供时自动生成）')
-    lyrics_group.add_argument('--lyrics-input', type=str, metavar='FILE',
-                           help='现有歌词文件路径（仅在edit模式下使用）')
+    lyrics_group = parser.add_argument_group("歌词生成选项")
+    lyrics_group.add_argument(
+        "--lyrics-mode",
+        default="write_full_song",
+        choices=["write_full_song", "edit"],
+        help="生成模式：write_full_song=完整歌曲创作，edit=编辑/续写（默认write_full_song）",
+    )
+    lyrics_group.add_argument(
+        "--lyrics-title",
+        type=str,
+        metavar="TITLE",
+        help="歌曲标题（可选，不提供时自动生成）",
+    )
+    lyrics_group.add_argument(
+        "--lyrics-input",
+        type=str,
+        metavar="FILE",
+        help="现有歌词文件路径（仅在edit模式下使用）",
+    )
 
     # 🎵 音乐生成选项
-    music_group = parser.add_argument_group('音乐生成选项')
-    music_group.add_argument('--music-model', default='music-2.5+', choices=['music-2.5+', 'music-2.5'], help='音乐生成模型，默认music-2.5+（推荐）')
-    music_group.add_argument('--music-lyrics', help='音乐歌词内容或文件路径(.txt/.md) [music-2.5+: 可选（纯音乐模式）或1-3500字符，music-2.5: 1-3500字符]')
-    music_group.add_argument('--instrumental', action='store_true', help='生成纯音乐（无人声），仅music-2.5+支持')
-    music_group.add_argument('--lyrics-optimizer', action='store_true', help='根据prompt描述自动生成歌词，仅music-2.5+支持')
-    music_group.add_argument('--music-stream', action='store_true', help='启用流式传输（仅支持hex格式）')
-    music_group.add_argument('--music-format', default='hex', choices=['hex', 'url'], help='音频返回格式，默认hex')
-    music_group.add_argument('--music-sample-rate', type=int, default=44100, choices=[16000, 24000, 32000, 44100], help='音频采样率，默认44100')
-    music_group.add_argument('--music-bitrate', type=int, default=256000, choices=[32000, 64000, 128000, 256000], help='音频比特率，默认256000')
-    music_group.add_argument('--music-encoding', default='mp3', choices=['mp3', 'wav', 'pcm'], help='音频编码格式，默认mp3')
-    music_group.add_argument('--music-watermark', action='store_true', help='在音频末尾添加水印（仅非流式生效）')
+    music_group = parser.add_argument_group("音乐生成选项")
+    music_group.add_argument(
+        "--music-model",
+        default="music-2.5+",
+        choices=["music-2.5+", "music-2.5"],
+        help="音乐生成模型，默认music-2.5+（推荐）",
+    )
+    music_group.add_argument(
+        "--music-lyrics",
+        help="音乐歌词内容或文件路径(.txt/.md) [music-2.5+: 可选（纯音乐模式）或1-3500字符，music-2.5: 1-3500字符]",
+    )
+    music_group.add_argument(
+        "--instrumental",
+        action="store_true",
+        help="生成纯音乐（无人声），仅music-2.5+支持",
+    )
+    music_group.add_argument(
+        "--lyrics-optimizer",
+        action="store_true",
+        help="根据prompt描述自动生成歌词，仅music-2.5+支持",
+    )
+    music_group.add_argument(
+        "--music-stream", action="store_true", help="启用流式传输（仅支持hex格式）"
+    )
+    music_group.add_argument(
+        "--music-format",
+        default="hex",
+        choices=["hex", "url"],
+        help="音频返回格式，默认hex",
+    )
+    music_group.add_argument(
+        "--music-sample-rate",
+        type=int,
+        default=44100,
+        choices=[16000, 24000, 32000, 44100],
+        help="音频采样率，默认44100",
+    )
+    music_group.add_argument(
+        "--music-bitrate",
+        type=int,
+        default=256000,
+        choices=[32000, 64000, 128000, 256000],
+        help="音频比特率，默认256000",
+    )
+    music_group.add_argument(
+        "--music-encoding",
+        default="mp3",
+        choices=["mp3", "wav", "pcm"],
+        help="音频编码格式，默认mp3",
+    )
+    music_group.add_argument(
+        "--music-watermark",
+        action="store_true",
+        help="在音频末尾添加水印（仅非流式生效）",
+    )
 
     # 📺 视频管理
-    video_group = parser.add_argument_group('视频管理')
-    video_group.add_argument('-s', '--video-status', metavar='任务ID', help='查询视频状态（传入task_id）')
-    video_group.add_argument('-d', '--download-video', metavar='文件ID', help='下载视频文件（传入file_id）')
+    video_group = parser.add_argument_group("视频管理")
+    video_group.add_argument(
+        "-s", "--video-status", metavar="任务ID", help="查询视频状态（传入task_id）"
+    )
+    video_group.add_argument(
+        "-d", "--download-video", metavar="文件ID", help="下载视频文件（传入file_id）"
+    )
 
     # 🎬 视频生成选项
-    video_gen_group = parser.add_argument_group('视频生成选项')
-    video_gen_group.add_argument('--video-model', default='MiniMax-Hailuo-2.3',
-                                choices=[
-                                    'MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-02',
-                                    'T2V-01-Director', 'T2V-01',  # 文生视频
-                                    'I2V-01-Director', 'I2V-01-live', 'I2V-01',  # 图生视频
-                                    'S2V-01'  # 主体参考视频生成
-                                ],
-                                help='视频生成模型，默认MiniMax-Hailuo-2.3')
-    video_gen_group.add_argument('--video-duration', type=int, default=6, help='视频时长（秒），默认6')
-    video_gen_group.add_argument('--video-resolution', default='auto', choices=['auto', '720P', '768P', '1080P'], help='视频分辨率，默认auto')
-    video_gen_group.add_argument('--first-frame', help='首帧图片URL或路径（配合 -v 实现图生视频/首尾帧）')
-    video_gen_group.add_argument('--last-frame', help='尾帧图片URL或路径（配合 --first-frame 实现首尾帧生成）')
-    video_gen_group.add_argument('--subject-image', help='主体参考图片URL或路径（配合 -v 实现主体参考视频）')
-    video_gen_group.add_argument('--no-prompt-optimizer', action='store_true', help='禁用prompt自动优化')
-    video_gen_group.add_argument('--fast-preprocessing', action='store_true', help='启用快速预处理（仅Hailuo模型）')
-    video_gen_group.add_argument('--video-watermark', action='store_true', help='添加视频水印')
-    video_gen_group.add_argument('--callback-url', help='任务状态回调URL')
+    video_gen_group = parser.add_argument_group("视频生成选项")
+    video_gen_group.add_argument(
+        "--video-model",
+        default="MiniMax-Hailuo-2.3",
+        choices=[
+            "MiniMax-Hailuo-2.3",
+            "MiniMax-Hailuo-02",
+            "T2V-01-Director",
+            "T2V-01",  # 文生视频
+            "I2V-01-Director",
+            "I2V-01-live",
+            "I2V-01",  # 图生视频
+            "S2V-01",  # 主体参考视频生成
+        ],
+        help="视频生成模型，默认MiniMax-Hailuo-2.3",
+    )
+    video_gen_group.add_argument(
+        "--video-duration", type=int, default=6, help="视频时长（秒），默认6"
+    )
+    video_gen_group.add_argument(
+        "--video-resolution",
+        default="auto",
+        choices=["auto", "720P", "768P", "1080P"],
+        help="视频分辨率，默认auto",
+    )
+    video_gen_group.add_argument(
+        "--first-frame", help="首帧图片URL或路径（配合 -v 实现图生视频/首尾帧）"
+    )
+    video_gen_group.add_argument(
+        "--last-frame", help="尾帧图片URL或路径（配合 --first-frame 实现首尾帧生成）"
+    )
+    video_gen_group.add_argument(
+        "--subject-image", help="主体参考图片URL或路径（配合 -v 实现主体参考视频）"
+    )
+    video_gen_group.add_argument(
+        "--no-prompt-optimizer", action="store_true", help="禁用prompt自动优化"
+    )
+    video_gen_group.add_argument(
+        "--fast-preprocessing",
+        action="store_true",
+        help="启用快速预处理（仅Hailuo模型）",
+    )
+    video_gen_group.add_argument(
+        "--video-watermark", action="store_true", help="添加视频水印"
+    )
+    video_gen_group.add_argument("--callback-url", help="任务状态回调URL")
 
     # 📁 文件管理
-    file_group = parser.add_argument_group('文件管理')
-    file_group.add_argument('--upload-file', type=str, metavar='FILE_PATH', help='上传文件到MiniMax平台')
-    file_group.add_argument('--file-purpose', default='voice_clone',
-                           choices=['voice_clone', 'prompt_audio', 't2a_async_input'],
-                           help='文件使用目的，默认voice_clone（用于上传和列出文件）')
-    file_group.add_argument('--list-files', action='store_true',
-                           help='列出指定分类的文件（需配合--file-purpose使用）')
-    file_group.add_argument('--retrieve-file', type=str, metavar='FILE_ID', help='检索文件信息')
-    file_group.add_argument('--download-file', type=str, metavar='FILE_ID', help='下载文件')
-    file_group.add_argument('--save-path', type=str, metavar='PATH', help='下载文件保存路径')
-    file_group.add_argument('--delete-file', type=str, metavar='FILE_ID', help='删除文件')
-    file_group.add_argument('--delete-purpose', choices=['voice_clone', 'prompt_audio', 't2a_async', 't2a_async_input', 'video_generation'],
-                           help='删除文件时指定的用途（必填）')
-    
+    file_group = parser.add_argument_group("文件管理")
+    file_group.add_argument(
+        "--upload-file", type=str, metavar="FILE_PATH", help="上传文件到MiniMax平台"
+    )
+    file_group.add_argument(
+        "--file-purpose",
+        default="voice_clone",
+        choices=["voice_clone", "prompt_audio", "t2a_async_input"],
+        help="文件使用目的，默认voice_clone（用于上传和列出文件）",
+    )
+    file_group.add_argument(
+        "--list-files",
+        action="store_true",
+        help="列出指定分类的文件（需配合--file-purpose使用）",
+    )
+    file_group.add_argument(
+        "--retrieve-file", type=str, metavar="FILE_ID", help="检索文件信息"
+    )
+    file_group.add_argument(
+        "--download-file", type=str, metavar="FILE_ID", help="下载文件"
+    )
+    file_group.add_argument(
+        "--save-path", type=str, metavar="PATH", help="下载文件保存路径"
+    )
+    file_group.add_argument(
+        "--delete-file", type=str, metavar="FILE_ID", help="删除文件"
+    )
+    file_group.add_argument(
+        "--delete-purpose",
+        choices=[
+            "voice_clone",
+            "prompt_audio",
+            "t2a_async",
+            "t2a_async_input",
+            "video_generation",
+        ],
+        help="删除文件时指定的用途（必填）",
+    )
+
     args = parser.parse_args()
-    
+
     client = MiniMaxClient()
     file_mgr = FileManager()
-    
+
     if args.verbose:
         client.verbose = True
-    
+
     if args.interactive:
         print("💬 MiniMax AI 交互模式 (输入 'quit' 退出)")
         while True:
             try:
-                cmd = input("\n选择功能 [chat/image/video/music/lyrics/tts/quit]: ").strip()
-                if cmd == 'quit':
+                cmd = input(
+                    "\n选择功能 [chat/image/video/music/lyrics/tts/quit]: "
+                ).strip()
+                if cmd == "quit":
                     break
-                elif cmd == 'chat':
+                elif cmd == "chat":
                     message = input("消息: ")
                     print(client.chat(message))
-                elif cmd == 'image':
+                elif cmd == "image":
                     prompt = input("描述: ")
                     urls = client.image(prompt)
                     for url in urls:
                         print(url)
                         save = input("保存文件? (y/n): ")
-                        if save.lower() == 'y':
-                            filepath = file_mgr.save_file(url, f"image_{file_mgr.generate_timestamp()}.jpg", "images")
+                        if save.lower() == "y":
+                            filepath = file_mgr.save_file(
+                                url,
+                                f"image_{file_mgr.generate_timestamp()}.jpg",
+                                "images",
+                            )
                             print(f"✅ 已保存: {filepath}")
-                elif cmd == 'video':
+                elif cmd == "video":
                     prompt = input("描述: ")
                     task_id = client.video(prompt)
                     print(f"🎬 任务ID: {task_id}")
                     check = input("查询状态? (y/n): ")
-                    if check.lower() == 'y':
+                    if check.lower() == "y":
                         status = client.video_status(task_id)
                         status_map = {
-                            'Preparing': '📋 准备中',
-                            'Queueing': '⏳ 队列中',
-                            'Processing': '🎬 生成中',
-                            'Success': '✅ 成功',
-                            'Fail': '❌ 失败'
+                            "Preparing": "📋 准备中",
+                            "Queueing": "⏳ 队列中",
+                            "Processing": "🎬 生成中",
+                            "Success": "✅ 成功",
+                            "Fail": "❌ 失败",
                         }
-                        print(f"📊 状态: {status_map.get(status.get('status'), status.get('status'))}")
-                        if status.get('status') == 'Success':
-                            print(f"📐 分辨率: {status.get('video_width')}x{status.get('video_height')}")
+                        print(
+                            f"📊 状态: {status_map.get(status.get('status'), status.get('status'))}"
+                        )
+                        if status.get("status") == "Success":
+                            print(
+                                f"📐 分辨率: {status.get('video_width')}x{status.get('video_height')}"
+                            )
                             print(f"📁 文件ID: {status.get('file_id')}")
-                elif cmd == 'music':
+                elif cmd == "music":
                     prompt = input("音乐描述: ")
                     lyrics = input("歌词内容: ")
                     if not lyrics.strip():
                         print("❌ 音乐生成需要歌词内容")
                         continue
-                    
+
                     audio = client.music(prompt, lyrics, model="music-2.5")
                     if audio:
-                        filepath = file_mgr.save_file(audio, f"music_{file_mgr.generate_timestamp()}.mp3", "music")
+                        filepath = file_mgr.save_file(
+                            audio, f"music_{file_mgr.generate_timestamp()}.mp3", "music"
+                        )
                         print(f"✅ 音乐已保存: {filepath}")
-                elif cmd == 'lyrics':
-                    mode = input("生成模式 [write_full_song/edit]: ").strip() or 'write_full_song'
+                elif cmd == "lyrics":
+                    mode = (
+                        input("生成模式 [write_full_song/edit]: ").strip()
+                        or "write_full_song"
+                    )
                     prompt = input("提示词 (可选): ").strip()
                     title = input("歌曲标题 (可选): ").strip()
                     lyrics = None
-                    if mode == 'edit':
+                    if mode == "edit":
                         lyrics_path = input("现有歌词文件路径 (可选): ").strip()
                         if lyrics_path and Path(lyrics_path).exists():
-                            with open(lyrics_path, 'r', encoding='utf-8') as f:
+                            with open(lyrics_path, "r", encoding="utf-8") as f:
                                 lyrics = f.read()
                         else:
                             lyrics = input("现有歌词内容 (可选): ").strip()
 
-                    result = client.generate_lyrics(mode=mode, prompt=prompt, lyrics=lyrics, title=title)
+                    result = client.generate_lyrics(
+                        mode=mode, prompt=prompt, lyrics=lyrics, title=title
+                    )
 
                     if result.get("lyrics"):
-                        lyrics_filepath = file_mgr.save_text(result["lyrics"], f"lyrics_{file_mgr.generate_timestamp()}.txt", "music")
+                        lyrics_filepath = file_mgr.save_text(
+                            result["lyrics"],
+                            f"lyrics_{file_mgr.generate_timestamp()}.txt",
+                            "music",
+                        )
                         print(f"✅ 歌词已保存: {lyrics_filepath}")
 
                         print(f"\n🎵 歌曲标题: {result.get('song_title', '未命名')}")
-                        if result.get('style_tags'):
+                        if result.get("style_tags"):
                             print(f"🎨 风格标签: {result.get('style_tags')}")
                         print(f"\n🎤 完整歌词:")
                         print(result["lyrics"])
-                elif cmd == 'tts':
+                elif cmd == "tts":
                     text = input("文本: ")
-                    voice = input("音色ID (默认 female-chengshu): ").strip() or "female-chengshu"
+                    voice = (
+                        input("音色ID (默认 female-chengshu): ").strip()
+                        or "female-chengshu"
+                    )
                     audio = client.tts(text, voice)
                     if audio:
-                        filepath = file_mgr.save_file(audio, f"tts_{file_mgr.generate_timestamp()}.mp3", "audio")
+                        filepath = file_mgr.save_file(
+                            audio, f"tts_{file_mgr.generate_timestamp()}.mp3", "audio"
+                        )
                         print(f"✅ 已保存: {filepath}")
             except KeyboardInterrupt:
                 break
-    
+
     elif args.chat:
         content = file_mgr.read_input(args.chat, "对话内容")
 
@@ -2428,15 +2928,15 @@ def main():
             top_p=args.top_p,
             max_tokens=args.max_tokens,
             use_anthropic_api=args.anthropic_api,
-            show_thinking=args.show_thinking
+            show_thinking=args.show_thinking,
         )
 
         # 显示响应
         if args.show_thinking and isinstance(response, dict):
             print("=== 🧠 思考过程 ===")
-            print(response.get('thinking', ''))
+            print(response.get("thinking", ""))
             print("\n=== 📝 回复内容 ===")
-            print(response.get('content', ''))
+            print(response.get("content", ""))
         else:
             print(response)
     elif args.image:
@@ -2466,27 +2966,36 @@ def main():
             aigc_watermark=args.add_watermark,
             style_type=args.style_type,
             style_weight=args.style_weight,
-            reference_image=args.ref_image
+            reference_image=args.ref_image,
         )
 
         if result:
             for i, item in enumerate(result):
-                if args.response_format == 'url':
+                if args.response_format == "url":
                     # URL格式：下载并保存
-                    filepath = file_mgr.save_file(item, f"{filename_prefix}_{file_mgr.generate_timestamp()}_{i+1}.jpg", "images")
+                    filepath = file_mgr.save_file(
+                        item,
+                        f"{filename_prefix}_{file_mgr.generate_timestamp()}_{i + 1}.jpg",
+                        "images",
+                    )
                     print(f"✅ {mode_text}已保存: {filepath}")
                     print(f"🔗 图片URL: {item}")
                     if args.play:
                         import webbrowser
+
                         webbrowser.open(item)
                 else:
                     # Base64格式：保存为文件
                     import base64
+
                     try:
                         # 解码Base64数据
                         image_data = base64.b64decode(item)
-                        filepath = file_mgr.get_path("images", f"{filename_prefix}_{file_mgr.generate_timestamp()}_{i+1}.jpg")
-                        with open(filepath, 'wb') as f:
+                        filepath = file_mgr.get_path(
+                            "images",
+                            f"{filename_prefix}_{file_mgr.generate_timestamp()}_{i + 1}.jpg",
+                        )
+                        with open(filepath, "wb") as f:
                             f.write(image_data)
                         print(f"✅ {mode_text}Base64已保存: {filepath}")
                         print(f"📊 图片大小: {len(image_data)} 字节")
@@ -2499,7 +3008,9 @@ def main():
         # 根据图片参数判断视频生成模式
         if args.last_frame:
             # 首尾帧生成
-            resolution = args.video_resolution if args.video_resolution != 'auto' else '768P'
+            resolution = (
+                args.video_resolution if args.video_resolution != "auto" else "768P"
+            )
             task_id = client.start_end_to_video(
                 first_frame_image=args.first_frame,
                 last_frame_image=args.last_frame,
@@ -2508,7 +3019,7 @@ def main():
                 resolution=resolution,
                 prompt_optimizer=not args.no_prompt_optimizer,
                 aigc_watermark=args.video_watermark,
-                callback_url=args.callback_url
+                callback_url=args.callback_url,
             )
             print(f"🔗 首尾帧视频任务已提交")
             print(f"📊 任务ID: {task_id}")
@@ -2520,14 +3031,16 @@ def main():
                 prompt=prompt,
                 prompt_optimizer=not args.no_prompt_optimizer,
                 aigc_watermark=args.video_watermark,
-                callback_url=args.callback_url
+                callback_url=args.callback_url,
             )
             print(f"👤 主体参考视频任务已提交")
             print(f"📊 任务ID: {task_id}")
             print(f"🎭 使用模型: S2V-01")
         elif args.first_frame:
             # 图生视频
-            resolution = args.video_resolution if args.video_resolution != 'auto' else '720P'
+            resolution = (
+                args.video_resolution if args.video_resolution != "auto" else "720P"
+            )
             task_id = client.image_to_video(
                 first_frame_image=args.first_frame,
                 prompt=prompt,
@@ -2537,7 +3050,7 @@ def main():
                 prompt_optimizer=not args.no_prompt_optimizer,
                 fast_pretreatment=args.fast_preprocessing,
                 aigc_watermark=args.video_watermark,
-                callback_url=args.callback_url
+                callback_url=args.callback_url,
             )
             print(f"🖼️ 图生视频任务已提交")
             print(f"📊 任务ID: {task_id}")
@@ -2559,11 +3072,13 @@ def main():
         if not args.music_lyrics:
             print("❌ 音乐生成需要歌词参数")
             print("💡 使用: --music-lyrics '歌词内容' 或 --music-lyrics lyrics.txt")
-            print("📝 提示: 使用换行符分隔，支持[Intro][Verse][Chorus][Bridge][Outro]结构")
+            print(
+                "📝 提示: 使用换行符分隔，支持[Intro][Verse][Chorus][Bridge][Outro]结构"
+            )
             sys.exit(1)
 
         lyrics = file_mgr.read_input(args.music_lyrics, "音乐歌词")
-        
+
         # 使用新的音乐生成参数
         audio = client.music(
             prompt=prompt,
@@ -2576,27 +3091,32 @@ def main():
             aigc_watermark=args.music_watermark,
             model=args.music_model,
             is_instrumental=args.instrumental,
-            lyrics_optimizer=args.lyrics_optimizer
+            lyrics_optimizer=args.lyrics_optimizer,
         )
 
         if audio:
             # 根据返回格式处理音频
-            if args.music_format == 'url':
+            if args.music_format == "url":
                 # URL格式：下载并保存
                 ext = args.music_encoding
-                filepath = file_mgr.save_file(audio, f"music_{file_mgr.generate_timestamp()}.{ext}", "music")
+                filepath = file_mgr.save_file(
+                    audio, f"music_{file_mgr.generate_timestamp()}.{ext}", "music"
+                )
                 print(filepath)
                 if args.play:
                     file_mgr.play_audio(filepath)
             else:
                 # Hex格式：保存为文件
                 import base64
+
                 try:
                     # 解码hex数据
                     audio_data = bytes.fromhex(audio)
                     ext = args.music_encoding
-                    filepath = file_mgr.get_path("music", f"music_{file_mgr.generate_timestamp()}.{ext}")
-                    with open(filepath, 'wb') as f:
+                    filepath = file_mgr.get_path(
+                        "music", f"music_{file_mgr.generate_timestamp()}.{ext}"
+                    )
+                    with open(filepath, "wb") as f:
                         f.write(audio_data)
                     print(f"✅ 音乐已保存: {filepath}")
                     print(f"📊 音频大小: {len(audio_data)} 字节")
@@ -2616,10 +3136,7 @@ def main():
 
         # 调用歌词生成方法
         result = client.generate_lyrics(
-            mode=args.lyrics_mode,
-            prompt=prompt,
-            lyrics=lyrics,
-            title=args.lyrics_title
+            mode=args.lyrics_mode, prompt=prompt, lyrics=lyrics, title=args.lyrics_title
         )
 
         # 保存歌词到文件
@@ -2627,20 +3144,24 @@ def main():
             timestamp = file_mgr.generate_timestamp()
 
             # 保存歌词文件
-            lyrics_filepath = file_mgr.save_text(result["lyrics"], f"lyrics_{timestamp}.txt", "music")
+            lyrics_filepath = file_mgr.save_text(
+                result["lyrics"], f"lyrics_{timestamp}.txt", "music"
+            )
 
             print(f"✅ 歌词已保存: {lyrics_filepath}")
 
             # 保存提示词文件（标题 + 风格标签），方便生成音乐时使用
-            song_title = result.get('song_title', '')
-            style_tags = result.get('style_tags', '')
+            song_title = result.get("song_title", "")
+            style_tags = result.get("style_tags", "")
             if song_title or style_tags:
                 prompt_content = ""
                 if song_title:
                     prompt_content += f"歌曲标题: {song_title}\n"
                 if style_tags:
                     prompt_content += f"风格标签: {style_tags}\n"
-                prompt_filepath = file_mgr.save_text(prompt_content, f"prompt_{timestamp}.txt", "music")
+                prompt_filepath = file_mgr.save_text(
+                    prompt_content, f"prompt_{timestamp}.txt", "music"
+                )
                 print(f"✅ 提示词已保存: {prompt_filepath}")
 
             # 显示完整结果
@@ -2672,17 +3193,19 @@ def main():
             output_format=args.output_format,
             text_normalization=args.text_normalization,
             latex_read=args.latex_read,
-            force_cbr=args.force_cbr
+            force_cbr=args.force_cbr,
         )
 
         if audio:
             # 根据格式决定文件扩展名
             ext = args.format
-            if args.output_format == 'url':
+            if args.output_format == "url":
                 # 如果是URL格式，需要下载文件
-                ext = 'mp3'  # URL通常是mp3
+                ext = "mp3"  # URL通常是mp3
 
-            filepath = file_mgr.save_file(audio, f"tts_{file_mgr.generate_timestamp()}.{ext}", "audio")
+            filepath = file_mgr.save_file(
+                audio, f"tts_{file_mgr.generate_timestamp()}.{ext}", "audio"
+            )
             print(filepath)
             if args.play:
                 file_mgr.play_audio(filepath)
@@ -2691,11 +3214,11 @@ def main():
 
         # 状态映射
         status_map = {
-            'Preparing': '📋 准备中',
-            'Queueing': '⏳ 队列中',
-            'Processing': '🎬 生成中',
-            'Success': '✅ 成功',
-            'Fail': '❌ 失败'
+            "Preparing": "📋 准备中",
+            "Queueing": "⏳ 队列中",
+            "Processing": "🎬 生成中",
+            "Success": "✅ 成功",
+            "Fail": "❌ 失败",
         }
 
         # 友好的状态显示
@@ -2703,83 +3226,103 @@ def main():
         print(f"📊 状态: {status_map.get(status.get('status'), status.get('status'))}")
 
         # 如果成功，显示视频信息
-        if status.get('status') == 'Success':
-            file_id = status.get('file_id')
-            width = status.get('video_width')
-            height = status.get('video_height')
+        if status.get("status") == "Success":
+            file_id = status.get("file_id")
+            width = status.get("video_width")
+            height = status.get("video_height")
 
             print(f"🎬 视频已生成！")
             print(f"📐 分辨率: {width}x{height}")
             print(f"📁 文件ID: {file_id}")
             print(f"📥 下载命令: python minimax_cli.py -d {file_id}")
-        elif status.get('status') == 'Fail':
+        elif status.get("status") == "Fail":
             print(f"❌ 生成失败")
-            if 'base_resp' in status:
-                print(f"错误信息: {status['base_resp'].get('status_msg', 'Unknown error')}")
+            if "base_resp" in status:
+                print(
+                    f"错误信息: {status['base_resp'].get('status_msg', 'Unknown error')}"
+                )
     elif args.download_video:
         filepath = client.download_video(args.download_video)
         print(f"✅ 视频已下载: {filepath}")
     elif args.list_voices or args.refresh_voices:
         voice_type = args.list_voices or "all"
-        
+
         if args.refresh_voices:
             # 强制刷新缓存
             cache_file = Path("./cache/voices.json")
             if cache_file.exists():
                 cache_file.unlink()
                 print("🔄 已清除音色缓存")
-        
+
         voices_data = client.list_voices(voice_type)
         if not voices_data:
             print("❌ 无法获取音色列表")
             return
-            
+
         filter_keyword = args.filter_voices
-        
+
         # 格式化输出
         def format_voices(voice_list, title):
             if not voice_list:
                 return
-            
+
             print(f"\n🎭 {title}")
             for voice in voice_list:
-                voice_id = voice.get('voice_id', '')
-                name = voice.get('voice_name', voice_id)
-                desc = " ".join(voice.get('description', [])) if isinstance(voice.get('description'), list) else str(voice.get('description', ''))
-                
+                voice_id = voice.get("voice_id", "")
+                name = voice.get("voice_name", voice_id)
+                desc = (
+                    " ".join(voice.get("description", []))
+                    if isinstance(voice.get("description"), list)
+                    else str(voice.get("description", ""))
+                )
+
                 # 过滤关键词
-                if filter_keyword and filter_keyword.lower() not in f"{voice_id} {name} {desc}".lower():
+                if (
+                    filter_keyword
+                    and filter_keyword.lower()
+                    not in f"{voice_id} {name} {desc}".lower()
+                ):
                     continue
-                    
+
                 print(f"├─ {voice_id:<20} {name:<15} [{desc}]")
-        
+
         # 系统音色
-        format_voices(voices_data.get('system_voice', []), "系统音色")
-        format_voices(voices_data.get('voice_cloning', []), "克隆音色")
-        format_voices(voices_data.get('voice_generation', []), "生成音色")
-        format_voices(voices_data.get('music_generation', []), "音乐音色")
-        
-        total_count = sum(len(voices_data.get(k) or []) for k in ['system_voice', 'voice_cloning', 'voice_generation', 'music_generation'])
+        format_voices(voices_data.get("system_voice", []), "系统音色")
+        format_voices(voices_data.get("voice_cloning", []), "克隆音色")
+        format_voices(voices_data.get("voice_generation", []), "生成音色")
+        format_voices(voices_data.get("music_generation", []), "音乐音色")
+
+        total_count = sum(
+            len(voices_data.get(k) or [])
+            for k in [
+                "system_voice",
+                "voice_cloning",
+                "voice_generation",
+                "music_generation",
+            ]
+        )
         print(f"\n📊 总计: {total_count} 个音色")
 
     # 📁 文件管理功能
     elif args.upload_file:
         result = client.upload_file(args.upload_file, args.file_purpose)
-        if 'error' in result:
+        if "error" in result:
             print(f"❌ 上传失败: {result['error']}")
         else:
-            file_info = result.get('file', {})
+            file_info = result.get("file", {})
             print(f"✅ 文件上传成功!")
             print(f"📁 文件ID: {file_info.get('file_id', '')}")
             print(f"📄 文件名: {file_info.get('filename', '')}")
-            print(f"📊 大小: {file_info.get('bytes', 0)/1024:.1f} KB")
+            print(f"📊 大小: {file_info.get('bytes', 0) / 1024:.1f} KB")
             print(f"🎯 用途: {file_info.get('purpose', '')}")
 
     # 🎤 音色快速复刻
     elif args.clone:
         if not args.clone_file_id:
             print("❌ 音色复刻必须提供 --clone-file-id 参数")
-            print("💡 提示：请先使用 --upload-file 上传复刻音频文件（--file-purpose voice_clone）")
+            print(
+                "💡 提示：请先使用 --upload-file 上传复刻音频文件（--file-purpose voice_clone）"
+            )
             return
 
         voice_id = args.clone
@@ -2795,7 +3338,7 @@ def main():
                 need_noise_reduction=args.noise_reduction,
                 need_volume_normalization=args.volume_normalization,
                 aigc_watermark=args.add_watermark,
-                continuous_sound=args.continuous_sound
+                continuous_sound=args.continuous_sound,
             )
 
             # 显示结果
@@ -2803,25 +3346,33 @@ def main():
             print("-" * 50)
             print(f"🎭 音色ID: {voice_id}")
 
-            demo_audio = result.get('demo_audio', '')
+            demo_audio = result.get("demo_audio", "")
             if demo_audio:
                 print(f"🎵 试听音频: {demo_audio}")
             else:
                 print("📝 未生成试听音频")
 
             # 风控检查
-            input_sensitive = result.get('input_sensitive', {})
+            input_sensitive = result.get("input_sensitive", {})
             if input_sensitive:
-                sensitive_type = input_sensitive.get('type', 0)
+                sensitive_type = input_sensitive.get("type", 0)
                 if sensitive_type != 0:
                     type_names = {
-                        0: "正常", 1: "严重违规", 2: "色情", 3: "广告",
-                        4: "违禁", 5: "谩骂", 6: "暴恐", 7: "其他"
+                        0: "正常",
+                        1: "严重违规",
+                        2: "色情",
+                        3: "广告",
+                        4: "违禁",
+                        5: "谩骂",
+                        6: "暴恐",
+                        7: "其他",
                     }
-                    print(f"⚠️ 警告：输入音频命中风控 - {type_names.get(sensitive_type, f'类型{sensitive_type}')}")
+                    print(
+                        f"⚠️ 警告：输入音频命中风控 - {type_names.get(sensitive_type, f'类型{sensitive_type}')}"
+                    )
 
             print("\n💡 使用新音色:")
-            print(f"   python minimax_cli.py -t \"你的文本\" --voice {voice_id}")
+            print(f'   python minimax_cli.py -t "你的文本" --voice {voice_id}')
 
         except ValueError as e:
             print(f"❌ 参数错误: {e}")
@@ -2834,12 +3385,16 @@ def main():
         if not args.design_prompt:
             print("❌ 错误：音色设计需要提供 --design-prompt 参数")
             print("💡 使用示例：")
-            print('   python minimax_cli.py --design-prompt "声音低沉富有磁性的播音员" --preview-text "大家好"')
+            print(
+                '   python minimax_cli.py --design-prompt "声音低沉富有磁性的播音员" --preview-text "大家好"'
+            )
             return
         if not args.preview_text:
             print("❌ 错误：音色设计需要提供 --preview-text 参数")
             print("💡 使用示例：")
-            print('   python minimax_cli.py --design-prompt "声音低沉富有磁性的播音员" --preview-text "大家好"')
+            print(
+                '   python minimax_cli.py --design-prompt "声音低沉富有磁性的播音员" --preview-text "大家好"'
+            )
             return
 
         try:
@@ -2847,17 +3402,17 @@ def main():
                 prompt=args.design_prompt,
                 preview_text=args.preview_text,
                 voice_id=args.design,
-                aigc_watermark=args.add_watermark
+                aigc_watermark=args.add_watermark,
             )
 
             # 检查响应格式
-            if 'error' in result:
+            if "error" in result:
                 print(f"❌ 音色设计失败: {result['error']}")
-            elif 'base_resp' in result and result['base_resp']['status_code'] != 0:
+            elif "base_resp" in result and result["base_resp"]["status_code"] != 0:
                 print(f"❌ 音色设计失败: {result['base_resp']['status_msg']}")
             else:
-                voice_id = result.get('voice_id', '')
-                trial_audio = result.get('trial_audio', '')
+                voice_id = result.get("voice_id", "")
+                trial_audio = result.get("trial_audio", "")
 
                 print(f"\n🎨 音色设计完成")
                 print("-" * 50)
@@ -2867,15 +3422,18 @@ def main():
                 # 保存试听音频
                 if trial_audio:
                     import binascii
+
                     try:
                         audio_data = binascii.unhexlify(trial_audio)
-                        filepath = file_mgr.save_file(trial_audio, f"voice_design_{voice_id}.mp3", "audio")
+                        filepath = file_mgr.save_file(
+                            trial_audio, f"voice_design_{voice_id}.mp3", "audio"
+                        )
                         print(f"💾 试听音频已保存: {filepath}")
                     except Exception as e:
                         print(f"⚠️ 音频保存失败: {e}")
 
                 print("\n💡 使用新音色:")
-                print(f"   python minimax_cli.py -t \"你的文本\" --voice {voice_id}")
+                print(f'   python minimax_cli.py -t "你的文本" --voice {voice_id}')
 
         except ValueError as e:
             print(f"❌ 参数错误: {e}")
@@ -2887,22 +3445,28 @@ def main():
         purpose = args.file_purpose  # 使用 --file-purpose 指定的分类
         result = client.list_files(purpose=purpose)
 
-        if 'error' in result:
+        if "error" in result:
             print(f"❌ 获取文件列表失败: {result['error']}")
-        elif 'files' in result and isinstance(result['files'], list):
-            files = result['files']
+        elif "files" in result and isinstance(result["files"], list):
+            files = result["files"]
             print(f"\n📁 文件列表 - {purpose} (共 {len(files)} 个文件)")
             print("-" * 80)
 
             for file_info in files:
-                file_id = file_info.get('file_id', '')
-                filename = file_info.get('filename', '')
-                bytes_size = file_info.get('bytes', 0)
-                purpose = file_info.get('purpose', '')
-                created_at = file_info.get('created_at', 0)
+                file_id = file_info.get("file_id", "")
+                filename = file_info.get("filename", "")
+                bytes_size = file_info.get("bytes", 0)
+                purpose = file_info.get("purpose", "")
+                created_at = file_info.get("created_at", 0)
 
-                size_str = f"{bytes_size/1024:.1f} KB" if bytes_size > 0 else "未知大小"
-                time_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else "未知时间"
+                size_str = (
+                    f"{bytes_size / 1024:.1f} KB" if bytes_size > 0 else "未知大小"
+                )
+                time_str = (
+                    datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
+                    if created_at
+                    else "未知时间"
+                )
 
                 print(f"📄 {filename}")
                 print(f"   📁 ID: {file_id}")
@@ -2916,22 +3480,24 @@ def main():
     # 📁 文件检索功能
     elif args.retrieve_file:
         result = client.retrieve_file(args.retrieve_file)
-        if 'error' in result:
+        if "error" in result:
             print(f"❌ 检索文件失败: {result['error']}")
-        elif 'file' in result:
-            file_info = result['file']
+        elif "file" in result:
+            file_info = result["file"]
             print(f"\n📄 文件详细信息")
             print("-" * 50)
             print(f"📁 文件ID: {file_info.get('file_id', '')}")
             print(f"📄 文件名: {file_info.get('filename', '')}")
-            print(f"📊 大小: {file_info.get('bytes', 0)/1024:.1f} KB")
+            print(f"📊 大小: {file_info.get('bytes', 0) / 1024:.1f} KB")
             print(f"🎯 用途: {file_info.get('purpose', '')}")
-            if 'download_url' in file_info and file_info['download_url']:
+            if "download_url" in file_info and file_info["download_url"]:
                 print(f"🔗 下载链接: {file_info['download_url']}")
 
-            created_at = file_info.get('created_at', 0)
+            created_at = file_info.get("created_at", 0)
             if created_at:
-                time_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')
+                time_str = datetime.fromtimestamp(created_at).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
                 print(f"📅 创建时间: {time_str}")
         else:
             print("❌ 响应格式异常")
@@ -2939,7 +3505,7 @@ def main():
     # 📁 文件下载功能
     elif args.download_file:
         download_path = client.download_file(args.download_file, args.save_path)
-        if download_path.startswith('❌') or download_path.startswith('文件下载失败'):
+        if download_path.startswith("❌") or download_path.startswith("文件下载失败"):
             print(f"❌ {download_path}")
         else:
             print(f"✅ 文件已下载到: {download_path}")
@@ -2948,22 +3514,25 @@ def main():
     elif args.delete_file:
         if not args.delete_purpose:
             print("❌ 删除文件时必须指定 --delete-purpose 参数")
-            print("可选用途: voice_clone, prompt_audio, t2a_async, t2a_async_input, video_generation")
+            print(
+                "可选用途: voice_clone, prompt_audio, t2a_async, t2a_async_input, video_generation"
+            )
         else:
             result = client.delete_file(args.delete_file, args.delete_purpose)
-            if 'error' in result:
+            if "error" in result:
                 print(f"❌ {result['error']}")
-            elif 'base_resp' in result:
-                if result['base_resp']['status_code'] == 0:
+            elif "base_resp" in result:
+                if result["base_resp"]["status_code"] == 0:
                     print(f"✅ 文件删除成功: {args.delete_file}")
                 else:
-                    status_msg = result['base_resp'].get('status_msg', 'Unknown error')
+                    status_msg = result["base_resp"].get("status_msg", "Unknown error")
                     print(f"❌ 文件删除失败: {status_msg}")
             else:
                 print("❌ 响应格式异常")
 
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()
