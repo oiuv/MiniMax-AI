@@ -1257,30 +1257,34 @@ class MiniMaxClient:
         bitrate: int = 256000,
         format: str = "mp3",
         aigc_watermark: bool = False,
-        model: str = "music-2.5+",
+        model: str = "music-2.6",
         is_instrumental: bool = False,
         lyrics_optimizer: bool = False,
+        audio_url: str = None,
+        audio_base64: str = None,
     ) -> str:
-        """音乐生成 (music-2.5+ / music-2.5)
+        """音乐生成 (music-2.6 / music-cover)
 
         Args:
             prompt: 音乐描述，用于指定风格、情绪和场景
-                    - music-2.5+ 纯音乐: 必填 [1, 2000]字符
-                    - music-2.5+ 非纯音乐: 可选 [0, 2000]字符
-                    - music-2.5: 可选 [0, 2000]字符
+                    - music-2.6 纯音乐: 必填 [1, 2000]字符
+                    - music-2.6 非纯音乐: 可选 [0, 2000]字符
+                    - music-cover: 必填，描述目标翻唱风格
             lyrics: 歌词内容，支持结构标签
-                    - music-2.5+ 纯音乐: 非必填
-                    - music-2.5+ 非纯音乐: 必填 [1, 3500]字符
-                    - music-2.5: 必填 [1, 3500]字符
+                    - music-2.6 纯音乐: 非必填
+                    - music-2.6 非纯音乐: 必填 [1, 3500]字符（或使用lyrics_optimizer自动生成）
+                    - music-cover: 可选，不传则ASR自动提取
             stream: 是否使用流式传输，默认false
             output_format: 音频返回格式，可选url/hex，默认hex
             sample_rate: 采样率，可选16000/24000/32000/44100，默认44100
             bitrate: 比特率，可选32000/64000/128000/256000，默认256000
             format: 音频编码格式，可选mp3/wav/pcm，默认mp3
             aigc_watermark: 是否在音频末尾添加水印，默认false（仅非流式生效）
-            model: 音乐生成模型，默认music-2.5+（推荐）
-            is_instrumental: 是否生成纯音乐（无人声），仅music-2.5+支持，默认false
-            lyrics_optimizer: 是否根据prompt自动生成歌词，默认false
+            model: 音乐生成模型，默认music-2.6（推荐）
+            is_instrumental: 是否生成纯音乐（无人声），仅music-2.6支持，默认false
+            lyrics_optimizer: 是否根据prompt自动生成歌词，默认false，仅music-2.6支持
+            audio_url: 参考音频URL，仅music-cover翻唱模式使用
+            audio_base64: 参考音频Base64编码，仅music-cover翻唱模式使用
 
         Returns:
             音频数据（hex编码或URL）
@@ -1292,31 +1296,54 @@ class MiniMaxClient:
         prompt = prompt.strip() if prompt else ""
 
         # 模型特定的参数验证
-        is_music_25_plus = model == "music-2.5+"
-        is_music_25 = model == "music-2.5"
+        is_music_26 = model == "music-2.6"
+        is_cover_model = model == "music-cover"
 
-        if is_music_25_plus:
+        if is_cover_model:
+            # music-cover 翻唱模式校验
+            if not audio_url and not audio_base64:
+                print(f"❌ 翻唱模式必须提供参考音频（audio_url 或 audio_base64）")
+                print(f"💡 请上传参考音频或使用URL指向音频文件")
+                sys.exit(1)
+
+            if not prompt:
+                print(f"❌ 翻唱模式必须描述目标风格（prompt为必填参数）")
+                print(f"💡 prompt: 描述目标翻唱风格，例如'流行摇滚版，节奏更快'")
+                sys.exit(1)
+
+            if len(prompt) > 2000:
+                print(f"❌ prompt过长 ({len(prompt)}字符)")
+                print(f"💡 music-cover: prompt长度限制[1, 2000]字符")
+                sys.exit(1)
+
+            # 翻唱模式lyrics可选，不传则ASR提取
+            if lyrics and len(lyrics) > 3500:
+                print(f"❌ 歌词过长 ({len(lyrics)}字符)")
+                print(f"💡 music-cover: 歌词长度限制[0, 3500]字符")
+                sys.exit(1)
+
+        elif is_music_26:
             if is_instrumental:
-                # music-2.5+ 纯音乐: prompt必填 [1, 2000], lyrics可选
+                # music-2.6 纯音乐: prompt必填 [1, 2000], lyrics可选
                 if not prompt:
                     print(f"❌ 纯音乐模式下，音乐描述(prompt)为必填参数")
-                    print(f"💡 music-2.5+ 纯音乐: prompt长度限制[1, 2000]字符")
+                    print(f"💡 music-2.6 纯音乐: prompt长度限制[1, 2000]字符")
                     print(f"📝 示例: '独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆'")
                     sys.exit(1)
                 if len(prompt) > 2000:
                     print(f"❌ prompt过长 ({len(prompt)}字符)")
-                    print(f"💡 music-2.5+ 纯音乐: prompt长度限制[1, 2000]字符")
+                    print(f"💡 music-2.6 纯音乐: prompt长度限制[1, 2000]字符")
                     sys.exit(1)
             else:
-                # music-2.5+ 非纯音乐: prompt可选 [0, 2000], lyrics必填 [1, 3500]
+                # music-2.6 非纯音乐: prompt可选 [0, 2000], lyrics必填 [1, 3500]
                 if prompt and len(prompt) > 2000:
                     print(f"❌ prompt过长 ({len(prompt)}字符)")
-                    print(f"💡 music-2.5+: prompt长度限制[0, 2000]字符")
+                    print(f"💡 music-2.6: prompt长度限制[0, 2000]字符")
                     sys.exit(1)
 
                 if not lyrics and not lyrics_optimizer:
                     print(f"❌ 歌词为必填参数（除非启用自动生成歌词）")
-                    print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
+                    print(f"💡 music-2.6: 歌词长度限制[1, 3500]字符")
                     print(
                         f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'"
                     )
@@ -1325,40 +1352,16 @@ class MiniMaxClient:
                 if lyrics:
                     if len(lyrics) < 1:
                         print(f"❌ 歌词过短 ({len(lyrics)}字符)")
-                        print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
+                        print(f"💡 music-2.6: 歌词长度限制[1, 3500]字符")
                         sys.exit(1)
                     if len(lyrics) > 3500:
                         print(f"❌ 歌词过长 ({len(lyrics)}字符)")
-                        print(f"💡 music-2.5+: 歌词长度限制[1, 3500]字符")
+                        print(f"💡 music-2.6: 歌词长度限制[1, 3500]字符")
                         sys.exit(1)
-        elif is_music_25:
-            # music-2.5: prompt可选 [0, 2000], lyrics必填 [1, 3500]
-            if prompt and len(prompt) > 2000:
-                print(f"❌ prompt过长 ({len(prompt)}字符)")
-                print(f"💡 music-2.5: prompt长度限制[0, 2000]字符")
-                sys.exit(1)
-
-            if not lyrics:
-                print(f"❌ 歌词为必填参数")
-                print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
-                print(
-                    f"📝 示例: '[Verse]\\n街灯微亮晚风轻抚\\n[Chorus]\\n推开木门香气弥漫'"
-                )
-                sys.exit(1)
-
-            if len(lyrics) < 1:
-                print(f"❌ 歌词过短 ({len(lyrics)}字符)")
-                print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
-                sys.exit(1)
-
-            if len(lyrics) > 3500:
-                print(f"❌ 歌词过长 ({len(lyrics)}字符)")
-                print(f"💡 music-2.5模型: 歌词长度限制[1, 3500]字符")
-                sys.exit(1)
         else:
             # 旧模型: prompt必填 [10, 2000], lyrics [10, 3500]
             if not prompt:
-                print(f"❌ prompt为必填参数（非music-2.5+模型）")
+                print(f"❌ prompt为必填参数（非music-2.6/music-cover模型）")
                 print(f"💡 旧模型: prompt长度限制[10, 2000]字符")
                 print(f"📝 示例: '独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆'")
                 sys.exit(1)
@@ -1431,19 +1434,29 @@ class MiniMaxClient:
         if lyrics:
             data["lyrics"] = lyrics
 
-        # music-2.5+ 特有参数
-        if is_music_25_plus:
+        # music-2.6 特有参数
+        if is_music_26:
             if is_instrumental:
                 data["is_instrumental"] = True
             if lyrics_optimizer:
                 data["lyrics_optimizer"] = True
+
+        # music-cover 翻唱模式参数
+        if is_cover_model:
+            if audio_url:
+                data["audio_url"] = audio_url
+            if audio_base64:
+                data["audio_base64"] = audio_base64
+            # 翻唱模式不支持 is_instrumental / lyrics_optimizer
 
         # 仅在非流式时添加水印
         if not stream and aigc_watermark:
             data["aigc_watermark"] = True
 
         self._log(f"📋 使用模型: {model}")
-        if is_instrumental:
+        if is_cover_model:
+            self._log(f"🎤 翻唱模式: 参考音频已提供")
+        elif is_instrumental:
             self._log(f"🎼 生成类型: 纯音乐（无人声）")
         if prompt:
             self._log(
@@ -1451,7 +1464,7 @@ class MiniMaxClient:
             )
         if lyrics:
             self._log(f"🎤 歌词长度: {len(lyrics)}字符")
-        if lyrics_optimizer:
+        if lyrics_optimizer and is_music_26:
             self._log(f"🤖 自动生成歌词: 已启用")
         self._log(f"📊 音频设置: {format}, {sample_rate}Hz, {bitrate // 1000}kbps")
         self._log(f"🌊 流式传输: {'是' if stream else '否'}")
@@ -2834,23 +2847,35 @@ def main():
     music_group = parser.add_argument_group("音乐生成选项")
     music_group.add_argument(
         "--music-model",
-        default="music-2.5+",
-        choices=["music-2.5+", "music-2.5"],
-        help="音乐生成模型，默认music-2.5+（推荐）",
+        default="music-2.6",
+        choices=["music-2.6", "music-cover"],
+        help="音乐生成模型，默认music-2.6（推荐）",
     )
     music_group.add_argument(
         "--music-lyrics",
-        help="音乐歌词内容或文件路径(.txt/.md) [music-2.5+: 可选（纯音乐模式）或1-3500字符，music-2.5: 1-3500字符]",
+        help="音乐歌词内容或文件路径(.txt/.md) [music-2.6: 可选（纯音乐模式）或1-3500字符，music-cover: 可选，留空则ASR提取]",
     )
     music_group.add_argument(
         "--instrumental",
         action="store_true",
-        help="生成纯音乐（无人声），仅music-2.5+支持",
+        help="生成纯音乐（无人声），仅music-2.6支持",
     )
     music_group.add_argument(
         "--lyrics-optimizer",
         action="store_true",
-        help="根据prompt描述自动生成歌词，仅music-2.5+支持",
+        help="根据prompt描述自动生成歌词，仅music-2.6支持",
+    )
+    music_group.add_argument(
+        "--audio-url",
+        type=str,
+        metavar="URL",
+        help="参考音频URL，仅music-cover翻唱模式使用",
+    )
+    music_group.add_argument(
+        "--audio-base64-file",
+        type=str,
+        metavar="FILE",
+        help="参考音频文件路径，将转换为base64，仅music-cover翻唱模式使用",
     )
     music_group.add_argument(
         "--music-stream", action="store_true", help="启用流式传输（仅支持hex格式）"
@@ -3041,12 +3066,24 @@ def main():
                             print(f"📁 文件ID: {status.get('file_id')}")
                 elif cmd == "music":
                     prompt = input("音乐描述: ")
-                    lyrics = input("歌词内容: ")
+                    lyrics = input("歌词内容 (可留空使用纯音乐模式): ")
+                    
                     if not lyrics.strip():
-                        print("❌ 音乐生成需要歌词内容")
-                        continue
+                        use_instrumental = input("是否生成纯音乐? (y/n): ")
+                        if use_instrumental.lower() != "y":
+                            print("❌ 音乐生成需要歌词内容或选择纯音乐模式")
+                            continue
+                        lyrics = None
+                        instrumental = True
+                    else:
+                        instrumental = False
 
-                    audio = client.music(prompt, lyrics, model="music-2.5")
+                    audio = client.music(
+                        prompt, 
+                        lyrics, 
+                        model="music-2.6",
+                        is_instrumental=instrumental
+                    )
                     if audio:
                         filepath = file_mgr.save_file(
                             audio, f"music_{file_mgr.generate_timestamp()}.mp3", "music"
@@ -3257,16 +3294,40 @@ def main():
         # 处理文件路径或文本内容
         prompt = file_mgr.read_input(args.music, "音乐描述")
 
-        # 歌词为必填
-        if not args.music_lyrics:
-            print("❌ 音乐生成需要歌词参数")
+        # 翻唱模式校验
+        is_cover_model = args.music_model == "music-cover"
+        if is_cover_model:
+            if not args.audio_url and not args.audio_base64_file:
+                print("❌ 翻唱模式必须提供参考音频")
+                print("💡 使用: --audio-url '音频URL' 或 --audio-base64-file 音频文件路径")
+                sys.exit(1)
+            if not prompt.strip():
+                print("❌ 翻唱模式必须描述目标风格")
+                print("💡 prompt: 描述目标翻唱风格，例如'流行摇滚版，节奏更快'")
+                sys.exit(1)
+
+        # 歌词为必填（非翻唱模式且非纯音乐模式且未启用歌词优化）
+        if not is_cover_model and not args.music_lyrics and not args.instrumental and not args.lyrics_optimizer:
+            print("❌ 音乐生成需要歌词参数（除非启用纯音乐模式或歌词自动生成）")
             print("💡 使用: --music-lyrics '歌词内容' 或 --music-lyrics lyrics.txt")
             print(
                 "📝 提示: 使用换行符分隔，支持[Intro][Verse][Chorus][Bridge][Outro]结构"
             )
             sys.exit(1)
 
-        lyrics = file_mgr.read_input(args.music_lyrics, "音乐歌词")
+        lyrics = file_mgr.read_input(args.music_lyrics, "音乐歌词") if args.music_lyrics else ""
+
+        # 处理 audio_base64
+        audio_base64_data = None
+        if args.audio_base64_file:
+            import base64
+            try:
+                with open(args.audio_base64_file, "rb") as f:
+                    audio_base64_data = base64.b64encode(f.read()).decode('utf-8')
+                print(f"✅ 已读取参考音频: {args.audio_base64_file}")
+            except Exception as e:
+                print(f"❌ 读取音频文件失败: {e}")
+                sys.exit(1)
 
         # 使用新的音乐生成参数
         audio = client.music(
@@ -3281,6 +3342,8 @@ def main():
             model=args.music_model,
             is_instrumental=args.instrumental,
             lyrics_optimizer=args.lyrics_optimizer,
+            audio_url=args.audio_url,
+            audio_base64=audio_base64_data,
         )
 
         if audio:

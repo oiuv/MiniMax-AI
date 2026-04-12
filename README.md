@@ -125,15 +125,26 @@ python minimax_cli.py -s2v person.jpg "一个人跑步并微笑"
 # 添加水印的高级生成
 python minimax_cli.py -s2v character.jpg "角色走向镜头并眨眼" --add-watermark --no-prompt-optimizer
 
-# 音乐生成（music-2.5）
-python minimax_cli.py -m "轻松愉快的背景音乐" --lyrics "[Verse]\n阳光洒落\n[Chorus]\n快乐每一天"
+# 音乐生成（music-2.6）
+python minimax_cli.py -m "轻松愉快的背景音乐" --music-lyrics "[Verse]\n阳光洒落\n[Chorus]\n快乐每一天"
 
-# 高级音乐生成（music-2.5新功能）
-python minimax_cli.py -m "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆" --lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" --music-watermark
+# 高级音乐生成（music-2.6新功能）
+python minimax_cli.py -m "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆" --music-lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" --music-watermark
 # 高质量音频输出
-python minimax_cli.py -m "摇滚音乐,激情,充满力量" --lyrics "[verse]\n吉他声响起\n[chorus]\n燃烧的青春" --music-format wav --music-bitrate 256000 --music-sample-rate 44100
+python minimax_cli.py -m "摇滚音乐,激情,充满力量" --music-lyrics "[verse]\n吉他声响起\n[chorus]\n燃烧的青春" --music-format wav --music-bitrate 256000 --music-sample-rate 44100
 # 流式传输（hex格式）
-python minimax_cli.py -m "电子音乐,未来感,科技" --lyrics "未来世界\n代码与梦想" --music-stream
+python minimax_cli.py -m "电子音乐,未来感,科技" --music-lyrics "未来世界\n代码与梦想" --music-stream
+# 纯音乐模式（无人声）
+python minimax_cli.py -m "轻松钢琴曲,适合咖啡厅背景" --instrumental
+# 自动生成歌词
+python minimax_cli.py -m "夏日海滩派对,欢快,阳光,浪花,冰镇饮料" --lyrics-optimizer
+
+# 翻唱模式（music-cover）
+python minimax_cli.py -m "流行摇滚版，节奏更快" --audio-url "https://example.com/original_song.mp3" --music-model music-cover
+# 使用本地音频文件翻唱
+python minimax_cli.py -m "爵士乐风格改编" --audio-base64-file ./original.mp3 --music-model music-cover
+# 翻唱时提供歌词（可选）
+python minimax_cli.py -m "民谣吉他版" --audio-url "https://example.com/song.mp3" --music-lyrics "[Verse]\n改编后的歌词" --music-model music-cover
 
 # 文本转语音（支持6个最新模型）
 python minimax_cli.py -t "你好，世界" --tts-model speech-2.6-hd --emotion happy --speed 1.2
@@ -161,7 +172,8 @@ python minimax_cli.py --list-voices
 | **图生视频** | I2V-01系列 | 静态图片转换为动态视频，支持运镜控制 |
 | **首尾帧生成** | MiniMax-Hailuo-02 | 起始到结束图片的过渡动画，高清输出 |
 | **主体参考生成** | S2V-01 | 基于人物主体图片生成视频，保持面部特征 |
-| **音乐创作** | music-2.5 | 自定义歌词，支持流式传输和多种音频格式，prompt可选 |
+| **音乐创作** | music-2.6 | 自定义歌词，支持流式传输和多种音频格式，prompt可选 |
+| **AI翻唱** | music-cover | 基于参考音频进行翻唱，支持风格转换，自动提取歌词 |
 | **语音合成** | speech-2.6系列 | 支持6个模型，9种情感，文本规范化，LaTeX朗读 |
 | **语音克隆** | voice_clone | 3秒快速克隆音色 |
 | **AI播客** | PodcastGenerator | 独立播客生成器，多角色对话、多音色合成 |
@@ -444,25 +456,45 @@ python minimax_cli.py -s2v subject.jpg "描述" \
 
 ### 音乐生成参数
 ```bash
+# music-2.6 文生音乐
 python minimax_cli.py -m "独立民谣,忧郁,内省" \
-    --music-model music-2.5 \      # 音乐生成模型 [music-2.5]
-    --lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" \
-    --music-stream \               # 启用流式传输（仅支持hex格式）
-    --music-format hex \            # 返回格式 [hex, url]，默认hex
-    --music-sample-rate 44100 \     # 采样率 [16000, 24000, 32000, 44100]
-    --music-bitrate 256000 \        # 比特率 [32000, 64000, 128000, 256000]
-    --music-encoding mp3 \          # 音频格式 [mp3, wav, pcm]
-    --music-watermark              # 添加音频水印（仅非流式生效）
+    --music-model music-2.6 \          # 音乐生成模型 [music-2.6, music-cover]
+    --music-lyrics "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫" \
+    --music-stream \                   # 启用流式传输（仅支持hex格式）
+    --music-format hex \                # 返回格式 [hex, url]，默认hex
+    --music-sample-rate 44100 \         # 采样率 [16000, 24000, 32000, 44100]
+    --music-bitrate 256000 \            # 比特率 [32000, 64000, 128000, 256000]
+    --music-encoding mp3 \              # 音频格式 [mp3, wav, pcm]
+    --music-watermark                  # 添加音频水印（仅非流式生效）
+
+# 纯音乐模式
+python minimax_cli.py -m "轻松钢琴曲" --instrumental
+
+# 自动生成歌词
+python minimax_cli.py -m "夏日海滩派对" --lyrics-optimizer
+
+# music-cover 翻唱模式
+python minimax_cli.py -m "流行摇滚版，节奏更快" \
+    --music-model music-cover \
+    --audio-url "https://example.com/original_song.mp3"
+    
+# 使用本地音频文件翻唱
+python minimax_cli.py -m "爵士乐风格改编" \
+    --music-model music-cover \
+    --audio-base64-file ./original.mp3
 ```
 
 ### 音乐生成特性
-- **最新模型**: music-2.5，支持更高音乐质量和更丰富风格
-- **长度限制**: prompt可选[0, 2000]字符，歌词必填[1, 3500]字符
+- **最新模型**: music-2.6，支持更高音乐质量和更丰富风格
+- **翻唱模式**: music-cover，支持基于参考音频的风格转换翻唱
+- **长度限制**: prompt可选[0, 2000]字符，歌词必填[1, 3500]字符（翻唱模式歌词可选）
 - **结构标签**: 支持[Intro][Verse][Pre Chorus][Chorus][Interlude][Bridge][Outro][Post Chorus][Transition][Break][Hook][Build Up][Inst][Solo]优化音乐结构
 - **输出格式**: 支持hex和url两种格式，url有效期24小时
 - **音频质量**: 支持16-44.1kHz采样率，32-256kbps比特率
 - **流式传输**: 支持实时生成，hex格式输出
 - **水印功能**: 可选择在音频末尾添加水印
+- **纯音乐模式**: 支持生成无人声的纯音乐
+- **自动歌词**: 可根据prompt描述自动生成歌词
 
 ### 图生视频模型特性
 - **I2V-01-Director**: 导演版，支持15种运镜指令，专业控制
@@ -704,11 +736,11 @@ portrait_urls = client.image(
 audio = client.music(
     "轻松愉悦的背景音乐",
     "[Verse]\n阳光洒落大地\n[Chorus]\n快乐每一天",
-    model="music-2.5"
+    model="music-2.6"
 )
 print(f"音乐已生成: {audio}")
 
-# 高级音乐生成（music-2.5新功能）
+# 高级音乐生成（music-2.6新功能）
 高质量_audio = client.music(
     "独立民谣,忧郁,内省,渴望,独自漫步,咖啡馆",
     "[verse]\n街灯微亮晚风轻抚\n[chorus]\n推开木门香气弥漫",
@@ -717,18 +749,50 @@ print(f"音乐已生成: {audio}")
     bitrate=256000,
     format="wav",
     output_format="url",
-    model="music-2.5"
+    model="music-2.6"
 )
 
 # 流式音乐生成
-流式音频 = client.music(
+流式_audio = client.music(
     "电子音乐,未来感,科技,节奏感强",
     "未来世界正在到来\n代码与梦想交织\n[Chorus]\n创造新纪元",
     stream=True,
     output_format="hex",
     sample_rate=32000,
     format="mp3",
-    model="music-2.5"
+    model="music-2.6"
+)
+
+# 纯音乐模式
+纯音乐_audio = client.music(
+    "轻松钢琴曲,适合咖啡厅背景",
+    model="music-2.6",
+    is_instrumental=True
+)
+
+# 自动生成歌词
+auto_lyrics_audio = client.music(
+    "夏日海滩派对,欢快,阳光,浪花",
+    model="music-2.6",
+    lyrics_optimizer=True
+)
+
+# 翻唱模式（music-cover）
+cover_audio = client.music(
+    "流行摇滚版，节奏更快",
+    model="music-cover",
+    audio_url="https://example.com/original_song.mp3"
+)
+
+# 使用本地音频文件翻唱
+import base64
+with open("./original.mp3", "rb") as f:
+    audio_base64_data = base64.b64encode(f.read()).decode('utf-8')
+    
+cover_audio_local = client.music(
+    "爵士乐风格改编",
+    model="music-cover",
+    audio_base64=audio_base64_data
 )
 
 # 生成播客（使用独立工具）

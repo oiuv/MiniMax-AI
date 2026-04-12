@@ -602,48 +602,55 @@ def create_audio_tab():
             with gr.TabItem("🎼 音乐创作"):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        model = gr.Dropdown(
-                            choices=["music-2.5+", "music-2.5"],
-                            value="music-2.5+",
+                        music_model = gr.Dropdown(
+                            choices=["music-2.6", "music-cover"],
+                            value="music-2.6",
                             label="模型",
                         )
-                        instrumental = gr.Checkbox(
+                        music_instrumental = gr.Checkbox(
                             label="纯音乐模式（无人声）", value=False
                         )
-                        prompt = gr.Textbox(
-                            label="音乐描述",
-                            placeholder="描述风格、情绪、场景，如：流行音乐,欢快,适合派对...",
+                        music_prompt = gr.Textbox(
+                            label="音乐描述/翻唱风格",
+                            placeholder="文生音乐：描述风格、情绪、场景，如：流行音乐,欢快,适合派对...\n翻唱模式：描述目标翻唱风格，如：流行摇滚版，节奏更快",
                             lines=2,
                         )
-                        lyrics = gr.Textbox(
+                        music_lyrics = gr.Textbox(
                             label="歌词",
-                            placeholder="[Verse]\n歌词内容...\n[Chorus]\n副歌内容...",
+                            placeholder="[Verse]\n歌词内容...\n[Chorus]\n副歌内容...\n\n翻唱模式可留空，AI将自动从参考音频提取歌词",
                             lines=6,
                         )
-                        lyrics_optimizer = gr.Checkbox(
+                        music_lyrics_optimizer = gr.Checkbox(
                             label="自动生成歌词", value=False
+                        )
+                        
+                        # 翻唱模式专属：参考音频
+                        music_audio_url = gr.Textbox(
+                            label="参考音频URL（翻唱模式）",
+                            placeholder="https://example.com/reference_audio.mp3",
+                            lines=2,
                         )
 
                         with gr.Accordion("音频参数", open=False):
-                            sample_rate = gr.Dropdown(
+                            music_sample_rate = gr.Dropdown(
                                 [16000, 24000, 32000, 44100],
                                 value=44100,
                                 label="采样率",
                             )
-                            bitrate = gr.Dropdown(
+                            music_bitrate = gr.Dropdown(
                                 [32000, 64000, 128000, 256000],
                                 value=256000,
                                 label="比特率",
                             )
-                            format_type = gr.Dropdown(
+                            music_format_type = gr.Dropdown(
                                 ["mp3", "wav", "pcm"], value="mp3", label="格式"
                             )
 
-                        generate_btn = gr.Button("🎵 生成音乐", variant="primary")
+                        music_generate_btn = gr.Button("🎵 生成音乐", variant="primary")
 
                     with gr.Column(scale=2):
-                        status = gr.Textbox(label="状态", value="等待生成...")
-                        audio_output = gr.Audio(label="生成结果", type="filepath")
+                        music_status = gr.Textbox(label="状态", value="等待生成...")
+                        music_audio_output = gr.Audio(label="生成结果", type="filepath")
 
                 def generate_music(
                     model,
@@ -651,18 +658,32 @@ def create_audio_tab():
                     prompt,
                     lyrics,
                     lyrics_opt,
+                    audio_url,
                     sample_rate,
                     bitrate,
                     format_type,
                 ):
                     try:
+                        is_cover = model == "music-cover"
+                        
+                        # 校验翻唱模式
+                        if is_cover:
+                            if not audio_url and not prompt:
+                                return "❌ 翻唱模式必须提供参考音频URL和目标风格描述", None
+                        
+                        # 校验非翻唱模式
+                        if not is_cover:
+                            if not instrumental and not lyrics_opt and not lyrics:
+                                return "❌ 请输入歌词，或启用纯音乐模式/自动生成歌词", None
+
                         # 调用音乐生成
                         audio_data = client.music(
                             prompt=prompt if prompt else None,
                             lyrics=lyrics if lyrics else None,
                             model=model,
-                            is_instrumental=instrumental,
-                            lyrics_optimizer=lyrics_opt,
+                            is_instrumental=instrumental and not is_cover,
+                            lyrics_optimizer=lyrics_opt and not is_cover,
+                            audio_url=audio_url if audio_url else None,
                             sample_rate=int(sample_rate),
                             bitrate=int(bitrate),
                             format=format_type,
@@ -677,19 +698,20 @@ def create_audio_tab():
                     except Exception as e:
                         return f"❌ 错误: {str(e)}", None
 
-                generate_btn.click(
+                music_generate_btn.click(
                     generate_music,
                     inputs=[
-                        model,
-                        instrumental,
-                        prompt,
-                        lyrics,
-                        lyrics_optimizer,
-                        sample_rate,
-                        bitrate,
-                        format_type,
+                        music_model,
+                        music_instrumental,
+                        music_prompt,
+                        music_lyrics,
+                        music_lyrics_optimizer,
+                        music_audio_url,
+                        music_sample_rate,
+                        music_bitrate,
+                        music_format_type,
                     ],
-                    outputs=[status, audio_output],
+                    outputs=[music_status, music_audio_output],
                 )
 
             # TTS
